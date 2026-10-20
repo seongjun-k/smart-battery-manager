@@ -1,6 +1,7 @@
 #include "io.h"
 
 #include <Arduino.h>
+#include <driver/gpio.h>
 #include <esp_rom_gpio.h>
 #include <soc/gpio_reg.h>
 #include <soc/gpio_sig_map.h>
@@ -146,7 +147,22 @@ void ioPoll() {
 
 // ---------------- 초기화 ----------------
 
+// 딥슬립 중에는 GPIO 출력이 풀려 PWM 핀이 떠 버린다. 4핀 팬은 PWM 선이 떠 있으면 최대 속도로 돌 수 있어 LOW로 고정한다
+void ioHoldOff() {
+  for (int pin : {PIN_LOAD, PIN_FAN_PWM}) {
+    ledcDetach(pin);
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, LOW);
+    gpio_hold_en((gpio_num_t)pin);
+  }
+  gpio_deep_sleep_hold_en();
+}
+
 void ioInit() {
+  // 딥슬립에서 깨어난 경우 고정이 남아 있으면 LEDC가 핀을 못 움직인다
+  gpio_deep_sleep_hold_dis();
+  gpio_hold_dis((gpio_num_t)PIN_LOAD);
+  gpio_hold_dis((gpio_num_t)PIN_FAN_PWM);
   ledcAttach(PIN_LOAD, LOAD_PWM_HZ, LOAD_PWM_BITS);
   ledcWrite(PIN_LOAD, 0);
   ledcAttach(PIN_FAN_PWM, FAN_PWM_HZ, FAN_PWM_BITS);

@@ -22,7 +22,6 @@ R_LOAD = 5.0          # 10Ω 20W ×2 병렬
 C_TH = 150.0          # 방열판+저항 열용량 [J/°C]
 R_TH_FAN = 1.6        # 팬 최대일 때 총 열저항 [°C/W] (보고서 열 설계)
 R_TH_NAT = 5.0        # 팬 정지 시 [°C/W]
-TAU_BATT = 300.0      # 배터리 온도 시정수 [s]
 T_AMB = 25.0
 FAN_RPM_MAX = 6000
 NOISE_V = 0.002
@@ -45,12 +44,16 @@ IMBALANCE_V = 0.05
 FAN_ON_T = 40.0
 DIAG_DUTY = 0.5       # IR 측정 펄스 듀티 (1초)
 DONE_HOLD_S = 5.0
-I_BAL = 0.05          # BQ76952 내장 밸런싱 전류 [확인 필요] 하드웨어 논의 때 확정
+I_BAL = 0.03          # BQ76907 내장 밸런싱 typ 추정: 4.2V ÷ (2×22Ω + R_CB typ 93Ω). 범위 약 17~43mA
+BAL_MAX_CELLS = 3     # 칩 발열 때문에 동시에 밸런싱하는 셀 수 상한
+BAL_AUTO_V = 0.015    # 보관 방전이 끝났을 때 셀 편차가 이보다 크면 밸런싱으로 자동 전환
 BAL_ON_V = 0.005      # 최저 셀보다 이만큼 높은 셀을 밸런싱
 BAL_DONE_V = 0.010    # 셀 간 전압 차가 이 이하면 밸런싱 완료
-CAP_END_V = 3.60      # 용량 테스트 종료 전압 [확인 필요] 하드웨어 차단 3.5V보다 노이즈 여유를 둠
+CAP_END_V = 3.60      # 용량 테스트 종료 전압. 하드웨어 차단 3.5V보다 노이즈 여유를 둠
+CHARGE_V = 3.70       # 실행 중이 아닐 때 최저 셀이 이보다 낮으면 충전 필요 경고 (계획서 3.12)
+IR_LIMIT_MOHM = 25.0  # 셀 IR이 이보다 크면 방전 거부. 부푼 배터리 의심 [확인 필요]
 MODES = ("STORAGE", "BALANCE", "CAPACITY", "DIAG")
-TRIP_ALARMS = {"CONN", "UNDERVOLT", "OVERTEMP_BATT", "OVERTEMP_SINK", "FAN_STOP"}
+TRIP_ALARMS = {"CONN", "UNDERVOLT", "OVERTEMP_SINK", "FAN_STOP"}
 
 
 def clamp(x, lo, hi):
@@ -84,7 +87,7 @@ class Plant:
         self.soc = [100.0] * cells
         self.r = [R_CELL] * cells
         self.rng = rng
-        self.t_amb = self.t_sink = self.t_batt = T_AMB
+        self.t_amb = self.t_sink = T_AMB
         self.current = 0.0
         self.fan = 0.0
         self.fan_broken = False
@@ -100,7 +103,6 @@ class Plant:
         r_th = R_TH_NAT - (R_TH_NAT - R_TH_FAN) * self.fan
         p_load = duty * i_on ** 2 * R_LOAD
         self.t_sink += (p_load - (self.t_sink - self.t_amb) / r_th) * dt / C_TH
-        self.t_batt += (self.t_amb - self.t_batt) * dt / TAU_BATT
 
     def inject(self, name):
         if name == "imbalance":
@@ -108,7 +110,9 @@ class Plant:
         elif name == "fan_stop":
             self.fan_broken = True
         elif name == "overheat":
-            self.t_amb = T_AMB + 15   # +25면 배터리 온도 45°C 차단이 먼저 걸려 방열판 감속을 못 본다
+            self.t_amb = T_AMB + 15   # 감속이 걸려도 방열판이 70°C 전에 평형을 이루는 폭
+        elif name == "high_ir":
+            self.r[0] = 0.030   # 부푼 배터리처럼 셀 1의 내부저항 증가
         elif name == "disconnect":
             self.connected = False
         elif name == "clear":
@@ -117,7 +121,7 @@ class Plant:
             return f"알 수 없는 fault: {name}"
         return None
 
-    # 측정 함수 — 펌웨어에서는 BQ76952 I2C 읽기로 바뀌는 부분
+    # 측정 함수 — 펌웨어에서는 BQ76907 I2C 읽기로 바뀌는 부분
     def read_cells(self):
         if not self.connected:
             return [0.0] * len(self.soc)
@@ -127,8 +131,8 @@ class Plant:
     def read_current(self):
         return self.current + self.rng.gauss(0, NOISE_I)
 
-    def read_temps(self):
-        return self.t_batt, self.t_sink
+    def read_temp(self):   # 방열판 NTC 하나뿐 (배터리 온도 센서는 두지 않음)
+        return self.t_sink
 
     def read_fan_rpm(self):
         return self.fan * FAN_RPM_MAX
@@ -161,7 +165,7 @@ class Device:
     def measure(self):
         self.cells = self.p.read_cells()
         self.current_avg = self.p.read_current()
-        self.temp_batt, self.temp_sink = self.p.read_temps()
+        self.temp_sink = self.p.read_temp()
         self.fan_rpm = self.p.read_fan_rpm()
         self.cell_count = sum(v > 2.5 for v in self.cells)   # detectCellCount
         self.pack_v = sum(self.cells)
@@ -185,8 +189,12 @@ class Device:
                 a.append("IMBALANCE")
             if min(self.cells) < V_CUTOFF:
                 a.append("UNDERVOLT")
-        if self.temp_batt > 45:
-            a.append("OVERTEMP_BATT")
+            # 장치는 충전을 못 하므로 알림만. 실행 중엔 판정하지 않는다 (용량 테스트 도중 경고음 방지)
+            on = "CHARGE_NEEDED" in self.alarms
+            if self.state != "RUN" and min(self.v_filt) < CHARGE_V + (0.02 if on else 0.0):
+                a.append("CHARGE_NEEDED")
+            if self.ir and max(self.ir) > IR_LIMIT_MOHM:   # 배터리 온도 센서가 없어 IR로 손상 배터리를 거른다
+                a.append("HIGH_IR")
         if self.temp_sink > 70:
             a.append("OVERTEMP_SINK")
         if self.fan_duty > 0 and self.fan_rpm == 0:
@@ -200,7 +208,7 @@ class Device:
         limits = {
             "I_P": P_TARGET / self.pack_v,
             "I_C": self.capacity_ah * C_RATE,
-            "I_T": min(derate(self.temp_batt, 40, 45), derate(self.temp_sink, 55, 70)) * I_HW,
+            "I_T": derate(self.temp_sink, 55, 70) * I_HW,
             # 테이퍼는 보관 모드만. 용량 테스트는 종료 전압까지 정전력
             "I_V": clamp((min_v - self.target_v) / TAPER_V, TAPER_MIN, 1.0) * I_HW
                    if self.mode == "STORAGE" else I_HW,
@@ -317,16 +325,24 @@ class Device:
         elif self.t - self.rest_t >= REST_S:
             if min(self.cells) > self.target_v + REST_MARGIN:
                 self.rest_t = None
+            elif max(self.v_filt) - min(self.v_filt) > BAL_AUTO_V:
+                # 최저 셀이 목표에 닿았는데 다른 셀이 높으면 밸런싱으로 이어서 맞춘다 (계획서 3.5)
+                self.outputs_off()
+                self.mode = "BALANCE"
+                self.d0 = max(self.v_filt) - min(self.v_filt)
             else:
                 self.finish()
 
     def balance_step(self):
-        """BQ76952 내장 밸런싱: 최저 셀보다 높은 셀만 소량 방전. 메인 부하는 쓰지 않는다."""
+        """BQ76907 내장 밸런싱: 최저 셀보다 높은 셀만 소량 방전. 메인 부하는 쓰지 않는다."""
         # 판정은 이동평균으로. 순간값은 노이즈로 편차가 작게 보여 일찍 끝난다
         min_v = min(self.v_filt)
         if max(self.v_filt) - min_v <= BAL_DONE_V:
             return self.finish()
-        self.bal = [v - min_v > BAL_ON_V for v in self.v_filt]
+        # 발열 제한: 기준을 넘는 셀 중 가장 높은 BAL_MAX_CELLS개만
+        high = sorted((v, i) for i, v in enumerate(self.v_filt) if v - min_v > BAL_ON_V)[-BAL_MAX_CELLS:]
+        on = {i for _, i in high}
+        self.bal = [i in on for i in range(len(self.v_filt))]
 
     def capacity_step(self):
         """정전력 방전하며 전하량 적산, 최저 셀이 종료 전압에 닿으면 용량 확정."""
@@ -358,6 +374,8 @@ class Device:
                 return f"지원하지 않는 mode: {mode}"
             if self.state not in ("SELECT", "DONE", "HOLD", "STOP"):
                 return f"{self.state} 상태에서는 시작할 수 없음"
+            if mode != "DIAG" and "HIGH_IR" in self.alarms:
+                return f"내부저항이 {max(self.ir)}mΩ으로 높아 방전할 수 없음. 부푼 배터리인지 확인"
             target = msg.get("targetV", 3.80)
             if target not in TARGET_PRESETS:
                 return f"targetV는 {TARGET_PRESETS} 중 하나여야 함"
@@ -391,7 +409,7 @@ class Device:
             "cells": [round(v, 3) for v in self.cells],
             "packV": round(self.pack_v, 2), "current": round(self.current_avg, 2),
             "duty": round(self.duty, 3),
-            "tempBatt": round(self.temp_batt, 1), "tempSink": round(self.temp_sink, 1),
+            "tempSink": round(self.temp_sink, 1),
             "fanRpm": round(self.fan_rpm),
             # 용량 테스트에서는 종료 전압을 targetV로 보낸다 (웹 진행률 계산용)
             "limit": self.limit, "targetV": CAP_END_V if self.mode == "CAPACITY" else self.target_v,
@@ -457,7 +475,7 @@ async def serve(dev, speed, port):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="스마트 배터리 관리 디바이스 가상 하드웨어")
-    ap.add_argument("--cells", type=int, default=6, choices=range(3, 7))
+    ap.add_argument("--cells", type=int, default=6, choices=range(2, 7))
     ap.add_argument("--speed", type=int, default=60, help="시뮬레이션 배속 (1 = 실시간)")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--seed", type=int)

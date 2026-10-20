@@ -10,10 +10,11 @@ enum Event : uint8_t { EV_START, EV_DONE, EV_STOP, EV_WARN };
 
 // 비트 순서 = 이름의 알파벳 순서. 낮은 비트부터 내보내면 sim의 sorted(alarms)와 같다
 enum Alarm : uint8_t {
-  AL_CONN = 1, AL_FAN_STOP = 2, AL_IMBALANCE = 4,
-  AL_OVERTEMP_BATT = 8, AL_OVERTEMP_SINK = 16, AL_UNDERVOLT = 32,
+  AL_CHARGE_NEEDED = 1, AL_CONN = 2, AL_FAN_STOP = 4, AL_HIGH_IR = 8,
+  AL_IMBALANCE = 16, AL_OVERTEMP_SINK = 32, AL_UNDERVOLT = 64,
 };
-constexpr uint8_t TRIP_ALARMS = AL_CONN | AL_UNDERVOLT | AL_OVERTEMP_BATT | AL_OVERTEMP_SINK | AL_FAN_STOP;
+// CHARGE_NEEDED, HIGH_IR, IMBALANCE는 알림만 하고 방전을 멈추지 않는다
+constexpr uint8_t TRIP_ALARMS = AL_CONN | AL_UNDERVOLT | AL_OVERTEMP_SINK | AL_FAN_STOP;
 constexpr int MAX_EVENTS = 8;
 
 struct Device {
@@ -39,6 +40,9 @@ struct Device {
   bool capValid = false;
   float capMeasured = 0;
 
+  double doneT = 0;                 // DONE에 들어간 시각. 완료 후 딥슬립 대기 시간의 기준
+  bool sleepNow = false;            // true가 되면 main이 딥슬립에 들어간다
+
   bool runValid = false;            // 진행률 기준: 시작 시각, 최저 셀 전압, 셀 편차
   double runT0 = 0;
   float v0 = 0, d0 = 0;
@@ -49,7 +53,7 @@ struct Device {
   int cellCount = 0;                // detectCellCount: 2.5V 넘는 셀 수
   float vFilt[MAX_CELLS] = {};
   bool vFiltValid = false;
-  float packV = 0, currentAvg = 0, tempBatt = 25, tempSink = 25, fanRpm = 0;
+  float packV = 0, currentAvg = 0, tempSink = 25, fanRpm = 0;
   double fanOnT = -1;               // 팬 명령이 켜진 시각, 꺼져 있으면 -1
 
   // 진단(estimateIR) 누적: sim의 v_off/v_on/i_on 리스트 대신 합계와 개수
@@ -68,6 +72,7 @@ const char *alarmName(uint8_t bit);       // Alarm 비트 하나 -> 이름
 void controlInit();
 void stateMachine();                       // 100ms마다 한 번 (sim.step)
 void onStop();                             // STOP 버튼·웹 정지 공통 경로
+const char *startRejectReason(Mode m);     // HIGH_IR로 방전 모드를 거부할 때의 오류 문구, 아니면 nullptr (웹·OK 버튼 공통)
 void cmdStart(Mode m, float targetV, float capacityAh);  // wsOnCommand가 검증한 뒤 호출
 void applyOutputs();                       // 듀티·팬·밸런싱을 하드웨어에 반영
 float progress();                          // 0~1, 없으면 NaN

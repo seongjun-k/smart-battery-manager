@@ -3,3 +3,4 @@
 void oledInit();
 void oledUpdate();
 void oledNextView();   // NEXT 버튼: 화면 전환
+void oledOff();        // 딥슬립 전: 디스플레이 끄기

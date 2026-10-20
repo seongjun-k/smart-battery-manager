@@ -1,6 +1,7 @@
 #include "control.h"
 
 #include <math.h>
+#include <stdio.h>
 
 #include "hal.h"
 
@@ -43,7 +44,7 @@ const char *eventName(Event e) {
 }
 
 const char *alarmName(uint8_t bit) {
-  static const char *const N[] = {"CONN", "FAN_STOP", "IMBALANCE", "OVERTEMP_BATT", "OVERTEMP_SINK", "UNDERVOLT"};
+  static const char *const N[] = {"CHARGE_NEEDED", "CONN", "FAN_STOP", "HIGH_IR", "IMBALANCE", "OVERTEMP_SINK", "UNDERVOLT"};
   return N[__builtin_ctz(bit)];
 }
 
@@ -74,7 +75,7 @@ static void measure() {
   if (top > 0) g.nCells = top;   // 끊기면 마지막 길이를 유지해 웹 셀 카드 수가 흔들리지 않게 한다
   for (int i = 0; i < MAX_CELLS; i++) g.cells[i] = (top > 0 && i < top) ? raw[i] : 0.0f;
   g.currentAvg = readCurrent();
-  readTemps(g.tempBatt, g.tempSink);
+  g.tempSink = readTemp();
   g.fanRpm = readFanRpm();
   g.packV = 0;
   for (int i = 0; i < g.nCells; i++) g.packV += g.cells[i];
@@ -100,8 +101,12 @@ static void checkAlarms() {
     if (maxOf(g.vFilt, g.nCells) - minOf(g.vFilt, g.nCells) > IMBALANCE_V - (on ? IMBALANCE_HYST_V : 0.0f))
       a |= AL_IMBALANCE;
     if (minOf(g.cells, g.nCells) < V_CUTOFF) a |= AL_UNDERVOLT;   // 보호 판정은 순간값
+    // 장치는 충전을 못 하므로 알림만. 실행 중엔 판정하지 않는다 (용량 테스트 도중 경고음 방지)
+    bool cn = g.alarms & AL_CHARGE_NEEDED;
+    if (g.state != State::RUN && minOf(g.vFilt, g.nCells) < CHARGE_V + (cn ? CHARGE_HYST_V : 0.0f)) a |= AL_CHARGE_NEEDED;
+    // 배터리 온도 센서가 없어 IR로 손상 배터리를 거른다
+    if (g.irN > 0 && maxOf(g.ir, g.irN) > IR_LIMIT_MOHM) a |= AL_HIGH_IR;
   }
-  if (g.tempBatt > TEMP_BATT_TRIP) a |= AL_OVERTEMP_BATT;
   if (g.tempSink > TEMP_SINK_TRIP) a |= AL_OVERTEMP_SINK;
   // 판정 기준은 직전 주기에 실제로 낸 팬 명령(fanDuty). 새 명령을 먼저 넣으면 켜는 순간 오판한다.
   // 실물 팬은 기동 지연이 있어 켠 뒤 FAN_GRACE_S가 지나야 회전수 0을 정지로 본다.
@@ -116,8 +121,7 @@ static float computeISet() {
   float lim[5];
   lim[0] = P_TARGET / g.packV;
   lim[1] = g.capacityAh * C_RATE;
-  lim[2] = fminf(derate(g.tempBatt, TEMP_BATT_DERATE, TEMP_BATT_TRIP),
-                 derate(g.tempSink, TEMP_SINK_DERATE, TEMP_SINK_TRIP)) * I_HW;
+  lim[2] = derate(g.tempSink, TEMP_SINK_DERATE, TEMP_SINK_TRIP) * I_HW;
   // 테이퍼는 보관 모드만. 용량 테스트는 종료 전압까지 정전력
   lim[3] = g.mode == Mode::STORAGE ? clampf((minV - g.targetV) / TAPER_V, TAPER_MIN, 1.0f) * I_HW : I_HW;
   lim[4] = I_HW;
@@ -173,6 +177,7 @@ static void finish() {
     }
   }
   go(State::DONE);
+  g.doneT = g.t;
   addEvent(EV_DONE);
 }
 
@@ -245,12 +250,20 @@ static void onSelect() {
   if (g.cellCount == 0) go(State::IDLE);
 }
 
-// BQ76952 내장 밸런싱: 최저 셀보다 높은 셀만 소량 방전. 메인 부하는 쓰지 않는다
+// BQ76907 내장 밸런싱: 최저 셀보다 높은 셀만 소량 방전. 메인 부하는 쓰지 않는다
 static void balanceStep() {
   // 판정은 이동평균으로. 순간값은 노이즈로 편차가 작게 보여 일찍 끝난다
   float minV = minOf(g.vFilt, g.nCells);
   if (maxOf(g.vFilt, g.nCells) - minV <= BAL_DONE_V) return finish();
-  for (int i = 0; i < g.nCells; i++) g.bal[i] = g.vFilt[i] - minV > BAL_ON_V;
+  // 발열 제한: 기준을 넘는 셀 중 가장 높은 BAL_MAX_CELLS개만. 전압이 같으면 번호가 큰 셀이 먼저 (sim의 sorted 뒤쪽)
+  for (int i = 0; i < MAX_CELLS; i++) g.bal[i] = false;
+  for (int k = 0; k < BAL_MAX_CELLS; k++) {
+    int best = -1;
+    for (int i = 0; i < g.nCells; i++)
+      if (!g.bal[i] && g.vFilt[i] - minV > BAL_ON_V && (best < 0 || g.vFilt[i] >= g.vFilt[best])) best = i;
+    if (best < 0) break;
+    g.bal[best] = true;
+  }
 }
 
 // 정전력 방전하며 전하량 적산, 최저 셀이 종료 전압에 닿으면 용량 확정
@@ -275,8 +288,16 @@ static void onRun() {
       controlStep();
     }
   } else if (g.t - g.restT >= REST_S) {
-    if (minOf(g.cells, g.nCells) > g.targetV + REST_MARGIN) g.restActive = false;
-    else finish();
+    if (minOf(g.cells, g.nCells) > g.targetV + REST_MARGIN) {
+      g.restActive = false;
+    } else if (maxOf(g.vFilt, g.nCells) - minOf(g.vFilt, g.nCells) > BAL_AUTO_V) {
+      // 최저 셀이 목표에 닿았는데 다른 셀이 높으면 밸런싱으로 이어서 맞춘다 (계획서 3.5)
+      outputsOff();
+      g.mode = Mode::BALANCE;
+      g.d0 = maxOf(g.vFilt, g.nCells) - minOf(g.vFilt, g.nCells);
+    } else {
+      finish();
+    }
   }
 }
 
@@ -286,6 +307,7 @@ static void onDone() {
 
 static void onHold() {
   if (g.cellCount == 0) go(State::IDLE);
+  else if (g.state == State::HOLD && g.t - g.doneT >= SLEEP_AFTER_S) g.sleepNow = true;   // DONE은 5초 뒤 HOLD로 넘어가므로 여기서 판정
 }
 
 void applyOutputs() {
@@ -319,6 +341,13 @@ void stateMachine() {
 void onStop() {
   if (g.state == State::RUN || g.state == State::DIAG) halt();
   applyOutputs();
+}
+
+const char *startRejectReason(Mode m) {
+  static char err[128];
+  if (m == Mode::DIAG || !(g.alarms & AL_HIGH_IR)) return nullptr;
+  snprintf(err, sizeof err, "내부저항이 %.1fmΩ으로 높아 방전할 수 없음. 부푼 배터리인지 확인", maxOf(g.ir, g.irN));
+  return err;
 }
 
 void cmdStart(Mode m, float targetV, float capacityAh) {

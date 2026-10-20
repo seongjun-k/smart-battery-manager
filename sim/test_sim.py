@@ -1,4 +1,4 @@
-"""시뮬레이터 자체 점검 = 보고서 7장 테스트 1~8. 실행: python sim/test_sim.py"""
+"""시뮬레이터 자체 점검 = 보고서 7장 테스트 1~10. 실행: python sim/test_sim.py"""
 import random
 
 from sim import CAP_END_V, CAPACITY_AH, DT, OCV_TABLE, Device, Plant, ocv
@@ -61,8 +61,8 @@ run_until(dev, lambda: "IMBALANCE" in dev.alarms, 5)   # 이동평균이라 약 
 before = max(dev.cells) - min(dev.cells)
 start(dev, "BALANCE")
 dev.step()
-assert dev.bal[0] is False and all(dev.bal[1:]) and dev.duty == 0, dev.bal
-run_until(dev, lambda: dev.state == "DONE", 8 * 3600)
+assert dev.bal[0] is False and sum(dev.bal) == 3 and dev.duty == 0, dev.bal   # 발열 제한: 동시 3셀
+run_until(dev, lambda: dev.state == "DONE", 16 * 3600)
 v = [ocv(s) for s in dev.p.soc]
 assert max(v) - min(v) <= 0.012, v
 assert dev.events.count("WARN") == 1, dev.events   # 50mV 기준을 지날 때 경고가 반복되지 않음
@@ -75,7 +75,8 @@ run_until(dev, lambda: dev.state == "DONE", 4 * 3600)
 expect = CAPACITY_AH * (1 - soc_at(CAP_END_V) / 100)
 err = dev.cap_measured / expect - 1
 assert abs(err) <= 0.05 and dev.status()["capMeasuredAh"] is not None, (dev.cap_measured, expect)
-print(f"4 용량 테스트 통과: 측정 {dev.cap_measured:.3f}Ah, 기대 {expect:.3f}Ah, 오차 {err * 100:+.1f}%, SOH {dev.soh}")
+run_until(dev, lambda: "CHARGE_NEEDED" in dev.alarms, 5)   # 3.70V 미만으로 끝났으니 충전 필요 알림
+print(f"4 용량 테스트 통과: 측정 {dev.cap_measured:.3f}Ah, 기대 {expect:.3f}Ah, 오차 {err * 100:+.1f}%, SOH {dev.soh}, 충전 필요 알림")
 
 # 5 팬 정지: 팬 동작 중 fan_stop → 즉시 중단
 dev = ready_dev()
@@ -116,15 +117,39 @@ dev.step()
 assert max(abs(f - c) for f, c in zip(dev.v_filt, dev.cells)) < 0.01, dev.v_filt   # 재연결 직후 평균이 0에서 시작하지 않음
 print("7 연결 불량 통과: 1주기 안에 듀티 0, CONN 경고, 재연결 후 필터 즉시 정상")
 
-# 8 정지: 웹 정지 명령 → 즉시 듀티 0
-dev = ready_dev(3)
+# 8 정지: 웹 정지 명령 → 즉시 듀티 0 (2S 배터리로)
+dev = ready_dev(2)
 start(dev)
 run_until(dev, lambda: dev.t > 60, 70)
 assert dev.duty > 0
 cmd(dev, cmd="stop")
 s = dev.status()
 assert dev.duty == 0 and s["state"] == "STOP" and "STOP" in s["events"], s
-print("8 정지 통과: 정지 명령 즉시 듀티 0")
+print("8 정지 통과: 2S에서 정지 명령 즉시 듀티 0")
+
+# 9 내부저항 높은 배터리: 진단에서 걸러 방전 거부, 진단은 허용
+dev = Device(Plant(6, random.Random(0)))
+cmd(dev, cmd="fault", name="high_ir")
+run_until(dev, lambda: dev.state == "SELECT", 10)
+run_until(dev, lambda: "HIGH_IR" in dev.alarms, 1)
+assert dev.command({"cmd": "start", "mode": "STORAGE", "targetV": 3.80}) is not None
+assert dev.command({"cmd": "start", "mode": "CAPACITY"}) is not None
+cmd(dev, cmd="start", mode="DIAG")
+print(f"9 IR 거부 통과: 셀 IR 최대 {max(dev.ir)}mΩ, 방전 모드 거부, 진단은 허용")
+
+# 10 자동 밸런싱: 불균형 상태로 보관 방전 → 목표 도달 후 밸런싱으로 이어서 모든 셀을 맞춤
+dev = ready_dev()
+cmd(dev, cmd="fault", name="imbalance")
+start(dev)
+switched = False
+for _ in range(int(16 * 3600 / DT)):
+    dev.step()
+    switched |= dev.mode == "BALANCE"
+    if dev.state == "DONE":
+        break
+v = [ocv(s) for s in dev.p.soc]
+assert switched and dev.state == "DONE" and max(v) - min(v) <= 0.012 and all(abs(x - 3.80) <= 0.05 for x in v), (switched, dev.state, v)
+print(f"10 자동 밸런싱 통과: 보관 후 밸런싱 전환, 셀 OCV {min(v):.3f}~{max(v):.3f}V, {dev.t / 3600:.1f}시간")
 
 # 명령 검증
 assert dev.command({"cmd": "start", "mode": "STORAGE", "targetV": 4.1}) is not None

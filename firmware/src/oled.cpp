@@ -6,7 +6,7 @@
 
 #include "control.h"
 
-// Wire는 main에서 먼저 시작한다 (BQ76952와 같은 I2C 버스)
+// Wire는 main에서 먼저 시작한다 (BQ76907과 같은 I2C 버스)
 static U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 static unsigned oledView = 0;
 
@@ -16,6 +16,8 @@ void oledInit() {
 }
 
 void oledNextView() { oledView++; }
+
+void oledOff() { u8g2.setPowerSave(1); }
 
 namespace {
 
@@ -87,7 +89,7 @@ void oledFrame(Frame &f, float *c, int nc) {
     snprintf(f.add(TITLE).t, sizeof(Line::t), "%s MODE", modeName(g.mode));
     snprintf(f.add(TEXT).t, sizeof(Line::t), "%dS  %.2fV", g.cellCount, packV);
     snprintf(f.add(TEXT).t, sizeof(Line::t), "RUN %dW %.2fA", jsRound(packV * cur), cur);
-    snprintf(f.add(TEXT).t, sizeof(Line::t), "Bat %dC Load %dC", jsRound(rnd(g.tempBatt, 1)), jsRound(rnd(g.tempSink, 1)));
+    snprintf(f.add(TEXT).t, sizeof(Line::t), "Load %dC Fan %d", jsRound(rnd(g.tempSink, 1)), (int)lroundf(g.fanRpm));
     snprintf(f.add(TEXT).t, sizeof(Line::t), "NEXT:view STOP:end");
     return;
   }

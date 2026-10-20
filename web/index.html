@@ -171,12 +171,11 @@
   <section class="card s4">
     <h2>온도와 냉각</h2>
     <dl class="kv num">
-      <dt>배터리</dt><dd id="tBatt">-</dd>
       <dt>방열판</dt><dd id="tSink">-</dd>
       <dt>팬</dt><dd id="fan">-</dd>
       <dt>PWM 듀티</dt><dd id="duty">-</dd>
     </dl>
-    <p class="note">보호 기준은 배터리 45°C, 방열판 70°C, 셀 3.5V이며 고정값입니다.</p>
+    <p class="note">보호 기준은 방열판 70°C, 셀 3.5V이며 고정값입니다. 배터리 온도 센서는 없고, 내부저항이 높은 배터리는 방전을 거부합니다.</p>
   </section>
 
   <section class="card s4">
@@ -235,6 +234,7 @@
         <button class="sub" type="button" data-fault="fan_stop">팬 정지</button>
         <button class="sub" type="button" data-fault="overheat">과열</button>
         <button class="sub" type="button" data-fault="disconnect">연결 불량</button>
+        <button class="sub" type="button" data-fault="high_ir">내부저항 증가</button>
         <button class="sub" type="button" data-fault="clear">모두 해제</button>
       </div>
     </div>
@@ -248,7 +248,7 @@ const KO = {
   mode: { STORAGE: '보관', BALANCE: '밸런싱', CAPACITY: '용량 테스트', DIAG: '진단' },
   alarm: {
     CONN: '연결 불량', IMBALANCE: '셀 불균형', UNDERVOLT: '셀 저전압',
-    OVERTEMP_BATT: '배터리 과열', OVERTEMP_SINK: '방열판 과열', FAN_STOP: '팬 정지',
+    OVERTEMP_SINK: '방열판 과열', FAN_STOP: '팬 정지', CHARGE_NEEDED: '충전 필요', HIGH_IR: '내부저항 높음',
   },
   limit: { I_P: '전력 한도', I_C: 'C-rate 한도', I_T: '온도 한도', I_V: '전압 한도', I_HW: '하드웨어 한도', REST: '휴지 중' },
   event: { START: '모드 시작', DONE: '완료', STOP: '정지' },
@@ -313,7 +313,7 @@ const chartVI = chart($('chartVI'), [['팩 전압', '#60a5fa', 'y'], ['전류', 
   y: { position: 'left', title: { display: true, text: 'V' } },
   y1: { position: 'right', title: { display: true, text: 'A' }, grid: { drawOnChartArea: false }, min: 0 },
 });
-const chartT = chart($('chartT'), [['배터리', '#22c55e', 'y'], ['방열판', '#f97316', 'y']], {
+const chartT = chart($('chartT'), [['방열판', '#f97316', 'y']], {
   y: { title: { display: true, text: '°C' }, suggestedMin: 20, suggestedMax: 75 },
 });
 function clearCharts() { [chartVI, chartT].forEach(c => { c.data.datasets.forEach(d => { d.data = []; }); c.update('none'); }); }
@@ -357,7 +357,7 @@ function oledFrame(s) {
     title(`${s.mode} MODE`);
     lines.push({ t: `${s.cellCount}S  ${f(s.packV, 2)}V` });
     lines.push({ t: `RUN ${Math.round(s.packV * s.current)}W ${f(s.current, 2)}A` });
-    lines.push({ t: `Bat ${Math.round(s.tempBatt)}C Load ${Math.round(s.tempSink)}C` });
+    lines.push({ t: `Load ${Math.round(s.tempSink)}C Fan ${s.fanRpm}` });
     lines.push({ t: 'NEXT:view STOP:end' });
     return lines;
   }
@@ -488,7 +488,6 @@ function render(s) {
 
   renderHero(s);
   renderCells(s);
-  $('tBatt').textContent = `${f(s.tempBatt, 1)} °C`;
   $('tSink').textContent = `${f(s.tempSink, 1)} °C`;
   $('fan').textContent = s.fanRpm ? `${s.fanRpm} RPM` : '정지';
   $('duty').textContent = `${f(s.duty * 100, 1)} %`;
@@ -506,7 +505,7 @@ function render(s) {
   drawOled(s);
   if (s.elapsed != null) {   // 그래프는 실행 중인 작업만 그린다
     push(chartVI, s.elapsed / 60, [s.packV, s.current]);
-    push(chartT, s.elapsed / 60, [s.tempBatt, s.tempSink]);
+    push(chartT, s.elapsed / 60, [s.tempSink]);
   }
 }
 

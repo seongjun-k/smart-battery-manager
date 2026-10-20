@@ -67,7 +67,6 @@ void wsBroadcast() {
   d["packV"] = rd(g.packV, 2);
   d["current"] = rd(g.currentAvg, 2);
   d["duty"] = rd(g.duty, 3);
-  d["tempBatt"] = rd(g.tempBatt, 1);
   d["tempSink"] = rd(g.tempSink, 1);
   d["fanRpm"] = (int)lroundf(g.fanRpm);
   d["limit"] = limitName(g.limit);
@@ -130,6 +129,7 @@ const char *wsOnCommand(const char *text) {
       snprintf(err, sizeof err, "%s 상태에서는 시작할 수 없음", stateName(s));
       return err;
     }
+    if (const char *e = startRejectReason(m)) return e;
     float target = TARGET_PRESETS[0];
     if (!d["targetV"].isNull()) {
       bool ok = false;

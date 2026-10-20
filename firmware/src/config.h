@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 // ---- 핀 배정 (docs/결과보고서_초안.md 3-1 표) ----
-constexpr int PIN_SDA = 8;           // BQ76952, OLED 공유
+constexpr int PIN_SDA = 8;           // BQ76907, OLED 공유
 constexpr int PIN_SCL = 9;
 constexpr int PIN_BQ_ALERT = 13;     // 현재 폴링 방식이라 입력으로만 둔다
 constexpr int PIN_BTN_NEXT = 4;      // 내부 풀업, 누르면 LOW
@@ -40,7 +40,7 @@ constexpr double FAN_GRACE_S = 2.0;        // 팬을 켠 뒤 이 시간이 지�
 
 // ---- 측정 ----
 constexpr int MAX_CELLS = 6;
-constexpr float SHUNT_MOHM = 5.0f;         // 보고서 3-1: 5mΩ 션트. BQ CC Gain 계산에 쓴다
+constexpr float SHUNT_MOHM = 5.0f;         // 보고서 3-1: 5mΩ 션트. BQ 전류값(1mΩ 기준 mA)을 실제 전류로 환산한다
 constexpr float CELL_PRESENT_V = 2.5f;     // sim: cell_count = (셀 > 2.5V)인 개수
 constexpr float V_FILT_ALPHA = 0.1f;       // 약 1초 이동평균 (100ms 주기)
 
@@ -61,11 +61,19 @@ constexpr float IMBALANCE_HYST_V = 0.010f; // 경고가 켜진 뒤엔 이만큼 
 constexpr float FAN_ON_T = 40.0f;
 constexpr float DIAG_DUTY = 0.5f;
 constexpr double DONE_HOLD_S = 5.0;
+constexpr int BAL_MAX_CELLS = 3;           // 칩 발열 때문에 동시에 밸런싱하는 셀 수 상한
+constexpr float BAL_AUTO_V = 0.015f;       // 보관 방전이 끝났을 때 셀 편차가 이보다 크면 밸런싱으로 자동 전환
 constexpr float BAL_ON_V = 0.005f;
 constexpr float BAL_DONE_V = 0.010f;
 constexpr float CAP_END_V = 3.60f;
+constexpr float CHARGE_V = 3.70f;          // 실행 중이 아닐 때 최저 셀이 이보다 낮으면 CHARGE_NEEDED
+constexpr float CHARGE_HYST_V = 0.020f;    // 켜진 뒤엔 이만큼 더 올라야 꺼진다
+constexpr float IR_LIMIT_MOHM = 25.0f;     // 셀 IR이 이보다 크면 HIGH_IR, 방전 거부
 constexpr float CAPACITY_AH = 2.2f;        // 웹에서 값을 안 주면 쓰는 기본 용량
 constexpr float R_LOAD = 5.0f;             // 10Ω 20W x2 병렬
-constexpr float TEMP_BATT_DERATE = 40.0f, TEMP_BATT_TRIP = 45.0f;
 constexpr float TEMP_SINK_DERATE = 55.0f, TEMP_SINK_TRIP = 70.0f;
 constexpr float TARGET_PRESETS[3] = {3.80f, 3.85f, 3.90f};
+
+// ---- 완료 후 딥슬립 ----
+// DONE 진입 후 이 시간이 지나면 AP·OLED·팬·BQ를 끄고 OK 버튼(GPIO5, LOW)으로 깨운다
+constexpr double SLEEP_AFTER_S = 600.0;
