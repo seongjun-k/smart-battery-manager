@@ -5,3 +5,5 @@ __pycache__/
 firmware/.pio/
 firmware/.vscode/
 .vscode/
+cad/OldVersions/
+cad/build.log

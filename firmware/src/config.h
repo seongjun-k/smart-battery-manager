@@ -70,7 +70,7 @@ constexpr float CHARGE_V = 3.70f;          // 실행 중이 아닐 때 최저 �
 constexpr float CHARGE_HYST_V = 0.020f;    // 켜진 뒤엔 이만큼 더 올라야 꺼진다
 constexpr float IR_LIMIT_MOHM = 25.0f;     // 셀 IR이 이보다 크면 HIGH_IR, 방전 거부
 constexpr float CAPACITY_AH = 2.2f;        // 웹에서 값을 안 주면 쓰는 기본 용량
-constexpr float R_LOAD = 5.0f;             // 10Ω 20W x2 병렬
+constexpr float R_LOAD = 5.0f;             // HS50 5Ω 50W 1개
 constexpr float TEMP_SINK_DERATE = 55.0f, TEMP_SINK_TRIP = 70.0f;
 constexpr float TARGET_PRESETS[3] = {3.80f, 3.85f, 3.90f};
 
