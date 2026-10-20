@@ -1,0 +1,127 @@
+(footprint "TEH100_TO-247-2_Vertical_P10.16mm"
+	(version 20241229)
+	(generator "gen_schematic")
+	(layer "F.Cu")
+	(descr "Ohmite TEH100 TO-247 2-lead power resistor, lead pitch 10.16mm (datasheet 9.90-10.42)")
+	(tags "TO-247 TEH100 resistor")
+	(property "Reference" "REF**"
+		(at 5.08 -4.17 0)
+		(layer "F.SilkS")
+		(uuid "ae369df4-5609-5c03-a755-00b494a4babb")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "TEH100"
+		(at 5.08 4.04 0)
+		(layer "F.Fab")
+		(uuid "76462cd2-7dfe-54d9-a7a4-40102b2bd4af")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "0ce14126-e01a-5468-bf45-7624fcb736af")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "da2475be-ec73-5166-8633-a51174b907c2")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4d1f6bfd-6372-5691-9214-b16a563d87b8")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr through_hole)
+	(fp_rect
+		(start -2.925 -2.67)
+		(end 13.085 2.54)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+		(uuid "775d278b-e788-5fa9-be6f-5f894c45012c")
+	)
+	(fp_line
+		(start -1.425 -2.67)
+		(end -1.425 2.54)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "c816da02-2ded-56a6-8216-8a103a95c8ee")
+	)
+	(fp_rect
+		(start -3.035 -2.78)
+		(end 13.195 2.65)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.SilkS")
+		(uuid "ad40b46d-dd83-575e-9014-4852af1004ca")
+	)
+	(fp_rect
+		(start -3.425 -3.17)
+		(end 13.585 3.04)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "260d3bcd-d7dd-5d9e-927d-604a9aa58f70")
+	)
+	(pad "1" thru_hole roundrect
+		(at 0 0)
+		(size 3.2 3.4)
+		(drill 2.2)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "c6b24af5-0400-5f5f-93da-6a3cd8ac8361")
+		(roundrect_rratio 0.15)
+	)
+	(pad "2" thru_hole oval
+		(at 10.16 0)
+		(size 3.2 3.4)
+		(drill 2.2)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "3e098c9c-47de-52e0-af96-11be3557717b")
+	)
+	(embedded_fonts no)
+)

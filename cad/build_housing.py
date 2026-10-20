@@ -2,7 +2,7 @@
 
 치수는 이 파일의 상수가 원본이다. 바꾼 뒤 다시 실행하면 cad/ 아래 파일을 덮어쓴다.
 좌표: 원점은 케이스 바깥 앞-왼쪽-바닥 모서리, X 오른쪽, Y 뒤쪽, Z 위쪽, 단위 mm.
-PCB 크기는 KiCad 외곽이 정해지기 전의 가정값이다.
+PCB 외곽과 커넥터·고정 구멍 위치는 KiCad hw/smart_bms.kicad_pcb 배치에 맞췄다.
 
 실행 (host, 프로젝트 루트): python cad/build_housing.py
 """
@@ -18,27 +18,30 @@ TPL = r"C:\Users\Public\Documents\Autodesk\Inventor 2027\Templates\ko-KR\Metric"
 # ---- 케이스 ----
 T = 2.5                    # 벽, 바닥, 덮개 두께
 W, D = 135.0, 105.0        # 바깥 가로(X), 세로(Y)
-H_SHELL = 88.0             # 하부 케이스 높이 (덮개 아래면). 세운 HS50 위 단자가 높이를 정한다
+H_SHELL = 56.0             # 하부 케이스 높이 (덮개 아래면). 팬 위로 덮개 립이 지나갈 여유가 높이를 정한다
 H = H_SHELL + T            # 전체 높이
 
-# ---- PCB (가정) ----
+# ---- PCB (KiCad 외곽: 128x98mm, 모서리 10mm 따냄) ----
 PCB = (3.5, 3.5, 131.5, 101.5)   # x0, y0, x1, y1. 모서리는 덮개 기둥 자리만큼 따낸다
 PCB_NOTCH = 10.0
 PCB_Z = 8.0                      # PCB 아래면 높이. 바닥 위 기둥 5.5mm
 PCB_TH = 1.6
+# PCB 고정 구멍 (KiCad hw/smart_bms.kicad_pcb의 H1~H4). 뒤-왼쪽은 팬 아래(팬 바닥이 PCB 위 0.9mm)를 피해 옮겼다
+PCB_POSTS = ((15.5, 15.5), (119.5, 15.5), (18.0, 98.0), (119.5, 89.5))
 
 # ---- 팬 NF-A4x20: 왼쪽 벽 안쪽, 배기 방향 ----
-FAN = (T, 55.0, 21.0)            # x0, y0, z0. 방열판 높이 가운데에 맞춤
+FAN = (T, 55.0, 10.5)            # x0, y0, z0. PCB 위로 띄우고 방열판 높이에 맞춤
 FAN_S, FAN_TH, FAN_HOLE = 40.0, 20.0, 32.0
 
-# ---- 방열판 Fischer SK 409 63,5 STS: PCB에 납땜 핀으로 세움. 핀이 팬 쪽(-X)을 향함 ----
+# ---- 방열판 Wakefield 657-15ABPE: PCB에 납땜 핀으로 세움. 핀이 팬 쪽(-X)을 향함 ----
 HS_X0, HS_YC = 26.0, 75.0
-HS_L, HS_W, HS_TH, HS_BASE = 63.5, 45.0, 12.7, 3.0   # 높이(압출 길이), 폭, 핀 포함 두께, 바닥판 두께(가정)
+HS_L, HS_W, HS_TH, HS_BASE = 38.1, 41.9, 25.4, 3.0   # 높이, 폭, 핀 포함 두께, 바닥판 두께(가정)
 HS_FINS = 9
 
-# ---- 방전 저항 HS50: 방열판 평평한 면(+X)에 세로로 고정. 아래 단자가 PCB에서 3mm 뜨게 ----
-RES_L, RES_BODY, RES_BW, RES_TAB, RES_H = 72.5, 49.1, 14.2, 29.7, 14.8
-RES_Z0 = PCB_Z + PCB_TH + 3.0    # 아래 단자 끝 높이
+# ---- 방전 저항 TEH100 (TO-247): 방열판 평평한 면(+X)에 나사 하나로 고정, 리드는 PCB에 바로 납땜 ----
+TO_W, TO_LEN, TO_T = 15.9, 20.8, 5.0   # 몸체 폭, 길이, 두께
+TO_PITCH = 10.16                       # 리드 간격 (Ohmite TEH100 데이터시트 9.90~10.42mm)
+TO_Z0 = PCB_Z + PCB_TH + 4.0           # 몸체 아래 끝 높이
 
 # ---- 덮개 부품: OLED, 패널 버튼 ----
 OLED = (85.0, 20.0)              # 모듈 앞-왼쪽 모서리 (덮개 아래면에 붙음)
@@ -128,7 +131,7 @@ def bottom():
         p.box(cx - 3.5, cy - 3.5, T, cx + 3.5, cy + 3.5, H_SHELL)
         p.cyl("z", (cx, cy), 2.0, H_SHELL - 8, H_SHELL + 1, cut=True)
     # PCB 기둥 4개
-    for cx, cy in ((PCB[0] + 12, PCB[1] + 12), (PCB[2] - 12, PCB[1] + 12), (PCB[0] + 12, PCB[3] - 12), (PCB[2] - 12, PCB[3] - 12)):
+    for cx, cy in PCB_POSTS:
         p.cyl("z", (cx, cy), 3.0, T, PCB_Z)
         p.cyl("z", (cx, cy), 2.0, T + 1, PCB_Z + 1, cut=True)
     # 배기구: 팬 앞 왼쪽 벽, 5mm 슬롯
@@ -144,7 +147,7 @@ def bottom():
     # 흡기구: 뒷면, 저항 뒤에서 오른쪽으로. 바람은 저항과 방열판을 지나 왼쪽 팬으로 나간다
     for i in range(8):
         x = 45 + i * 7
-        p.box(x, D - T - 1, 25, x + 4, D + 1, 75, cut=True)
+        p.box(x, D - T - 1, 14, x + 4, D + 1, 48, cut=True)
     # 커넥터 구멍
     zb = PCB_Z + PCB_TH
     p.box(-1, USB[0], zb - 0.5, T + 1, USB[1], zb + 4.0, cut=True)
@@ -199,10 +202,9 @@ def ref_parts():
     out.append(p.save())
 
     p = Part("ref_resistor")
-    bz0 = RES_Z0 + (RES_L - RES_BODY) / 2
-    p.box(face, HS_YC - RES_TAB / 2, bz0, face + 2.6, HS_YC + RES_TAB / 2, bz0 + RES_BODY)       # 고정 탭
-    p.box(face, HS_YC - RES_BW / 2, bz0, face + RES_H, HS_YC + RES_BW / 2, bz0 + RES_BODY)       # 몸체
-    p.box(face + 5, HS_YC - 1, RES_Z0, face + 9, HS_YC + 1, RES_Z0 + RES_L)                      # 단자
+    p.box(face, HS_YC - TO_W / 2, TO_Z0, face + TO_T, HS_YC + TO_W / 2, TO_Z0 + TO_LEN)          # 몸체
+    for dy in (-TO_PITCH / 2, TO_PITCH / 2):                                                  # 리드
+        p.box(face + 2.2, HS_YC + dy - 0.6, zb, face + 2.8, HS_YC + dy + 0.6, TO_Z0)
     out.append(p.save())
 
     p = Part("ref_oled")   # 덮개 아래면에 붙이고 케이블로 PCB에 잇는다
@@ -217,7 +219,7 @@ def ref_parts():
     p.box(PCB[0], USB[0] + 0.5, zb, PCB[0] + 7.5, USB[1] - 0.5, zb + 3.2)                  # USB-C
     p.box(PCB[2] - 16, XT60[0] + 0.5, zb, W - 0.5, XT60[1] - 0.5, zb + 8.2)               # XT60
     p.box(PCB[2] - 9, JST[0] + 0.5, zb, W - 0.5, JST[1] - 0.5, zb + 6.0)                  # JST-XH 7핀
-    p.box(30, 10, zb, 48, 35.5, zb + 3.2)                                                  # ESP32-S3 모듈 18×25.5
+    p.box(30, 3.5, zb, 48, 29, zb + 3.2)                                                   # ESP32-S3 모듈 18×25.5, 안테나가 앞 가장자리
     out.append(p.save())
     return out
 

@@ -7,3 +7,8 @@ firmware/.vscode/
 .vscode/
 cad/OldVersions/
 cad/build.log
+*.lck
+*.kicad_prl
+fp-info-cache
+hw/*-backups/
+.history/

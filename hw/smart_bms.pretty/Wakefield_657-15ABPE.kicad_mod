@@ -1,0 +1,126 @@
+(footprint "Wakefield_657-15ABPE"
+	(version 20241229)
+	(generator "gen_schematic")
+	(layer "F.Cu")
+	(descr "Wakefield 657-15ABPE heatsink, 41.9x25.4x38.1mm, 2 solder pins 2.4mm at 25.4mm")
+	(tags "heatsink TO-247 657")
+	(property "Reference" "REF**"
+		(at -12.7 -22.45 0)
+		(layer "F.SilkS")
+		(uuid "9b609f5a-1467-51d9-b88f-d59cd1d42813")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "657-15ABPE"
+		(at -12.7 22.45 0)
+		(layer "F.Fab")
+		(uuid "e302e7cb-f19f-5367-9ec2-0aeac5085310")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "c0355ea6-7e58-5c19-9be1-9bb9cf4dc4af")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "fd00b6cf-4a9d-57f6-ae8b-d7ba442ce65d")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "c5c41335-8d3c-5fe6-8356-5eeaeed6d3fb")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr through_hole)
+	(fp_rect
+		(start -23.9 -20.95)
+		(end 1.5 20.95)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+		(uuid "9fff5642-c78f-53f4-ac4a-0221b026d902")
+	)
+	(fp_line
+		(start -1.5 -20.95)
+		(end -1.5 20.95)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "112fbf3d-d979-5f44-9bb1-150277cc3ab1")
+	)
+	(fp_rect
+		(start -24.01 -21.06)
+		(end 1.61 21.06)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.SilkS")
+		(uuid "4bf47dc9-faba-538f-a7e7-0b3058237365")
+	)
+	(fp_rect
+		(start -24.4 -21.45)
+		(end 2 21.45)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "19f44a88-8040-5009-a94b-21c53755938d")
+	)
+	(pad "1" thru_hole circle
+		(at 0 -12.7)
+		(size 4.2 4.2)
+		(drill 2.8)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "0b6f7d21-d64d-5bce-b562-2950679dec33")
+	)
+	(pad "2" thru_hole circle
+		(at 0 12.7)
+		(size 4.2 4.2)
+		(drill 2.8)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "73e7d34d-9295-5d83-971d-4df3ba6e6316")
+	)
+	(embedded_fonts no)
+)
