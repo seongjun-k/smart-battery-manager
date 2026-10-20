@@ -18,10 +18,10 @@ OCV_TABLE = [(0, 3.27), (5, 3.61), (10, 3.69), (20, 3.73), (30, 3.77), (40, 3.80
              (50, 3.82), (60, 3.87), (70, 3.93), (80, 4.00), (90, 4.08), (100, 4.20)]
 CAPACITY_AH = 2.2     # 가상 배터리 용량
 R_CELL = 0.005        # 셀 내부저항 [Ω]
-R_LOAD = 5.0          # HS50 5Ω 50W 1개
+R_LOAD = 5.0          # TO-247 후막 저항 TEH100 5Ω 1개
 C_TH = 150.0          # 방열판+저항 열용량 [J/°C]
-R_TH_FAN = 1.6        # 팬 최대일 때 총 열저항 [°C/W] (보고서 열 설계)
-R_TH_NAT = 5.0        # 팬 정지 시 [°C/W]
+R_TH_FAN = 2.6        # 팬 최대일 때 총 열저항 [°C/W] (보고서 열 설계 요구치)
+R_TH_NAT = 6.6        # 팬 정지 시 [°C/W]. 657-15ABPE 자연대류 6.3 + 서멀 층
 T_AMB = 25.0
 FAN_RPM_MAX = 6000
 NOISE_V = 0.002
@@ -110,7 +110,7 @@ class Plant:
         elif name == "fan_stop":
             self.fan_broken = True
         elif name == "overheat":
-            self.t_amb = T_AMB + 15   # 감속이 걸려도 방열판이 70°C 전에 평형을 이루는 폭
+            self.t_amb = T_AMB + 15   # 감속이 걸려도 방열판이 95°C 전에 평형을 이루는 폭
         elif name == "high_ir":
             self.r[0] = 0.030   # 부푼 배터리처럼 셀 1의 내부저항 증가
         elif name == "disconnect":
@@ -195,7 +195,7 @@ class Device:
                 a.append("CHARGE_NEEDED")
             if self.ir and max(self.ir) > IR_LIMIT_MOHM:   # 배터리 온도 센서가 없어 IR로 손상 배터리를 거른다
                 a.append("HIGH_IR")
-        if self.temp_sink > 70:
+        if self.temp_sink > 95:
             a.append("OVERTEMP_SINK")
         if self.fan_duty > 0 and self.fan_rpm == 0:
             a.append("FAN_STOP")
@@ -208,7 +208,7 @@ class Device:
         limits = {
             "I_P": P_TARGET / self.pack_v,
             "I_C": self.capacity_ah * C_RATE,
-            "I_T": derate(self.temp_sink, 55, 70) * I_HW,
+            "I_T": derate(self.temp_sink, 80, 95) * I_HW,
             # 테이퍼는 보관 모드만. 용량 테스트는 종료 전압까지 정전력
             "I_V": clamp((min_v - self.target_v) / TAPER_V, TAPER_MIN, 1.0) * I_HW
                    if self.mode == "STORAGE" else I_HW,

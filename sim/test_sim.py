@@ -88,7 +88,7 @@ s = dev.status()
 assert dev.duty == 0 and s["state"] == "STOP" and "FAN_STOP" in s["alarms"] and "WARN" in s["events"], s
 print("5 팬 정지 통과: 1주기 안에 듀티 0, FAN_STOP 경고")
 
-# 6 과열 감속: 주변 온도 상승 → I_T 한도로 전류 감소, 방열판 70°C 이하 유지
+# 6 과열 감속: 주변 온도 상승 → I_T 한도로 전류 감소, 방열판 95°C 이하 유지
 dev = ready_dev()
 start(dev)
 run_until(dev, lambda: dev.t > 300, 400)
@@ -101,7 +101,7 @@ for _ in range(int(1800 / DT)):
     t_max = max(t_max, dev.temp_sink)
     if dev.limit == "I_T":
         i_min = min(i_min, dev.current_avg)
-assert seen_it and t_max <= 70 and dev.state == "RUN", (seen_it, t_max, dev.state, dev.alarms)
+assert seen_it and t_max <= 95 and dev.state == "RUN", (seen_it, t_max, dev.state, dev.alarms)
 print(f"6 과열 감속 통과: I_T 한도 작동, 전류 {i_before:.2f}A → 최저 {i_min:.2f}A, 방열판 최고 {t_max:.1f}°C")
 
 # 7 연결 불량: 밸런스 잭 분리 → 즉시 중단
