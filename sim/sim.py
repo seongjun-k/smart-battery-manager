@@ -1,6 +1,7 @@
 """가상 배터리·열 모델 + 펌웨어 제어 로직 이식 + WebSocket 서버.
 
-ESP32-S3 대신 보고서 6장과 같은 JSON을 ws://localhost:<port>/ws 로 제공한다.
+ESP32-S3 대신 보고서 6장과 같은 JSON을 ws://localhost:<port>/ws 로 제공하고,
+웹 대시보드(web/)를 http://localhost:<port>/ 로 제공한다.
 실행: python sim/sim.py [--cells 6] [--speed 60] [--port 8080]
 """
 import argparse
@@ -8,6 +9,9 @@ import asyncio
 import json
 import random
 from bisect import bisect_left
+from pathlib import Path
+
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 # 모델 상수 (추정값, 실측 없음 — 시제품에서 재조정)
 OCV_TABLE = [(0, 3.27), (5, 3.61), (10, 3.69), (20, 3.73), (30, 3.77), (40, 3.80),
@@ -146,6 +150,8 @@ class Device:
         self.alarms, self.events = [], []
         self.settings = {"buzzerKeyTone": True}
         self.ir = self.soh = self.cap_measured = None
+        self.run_t0 = self.v0 = self.d0 = None   # 진행률 기준: 시작 시각, 최저 셀 전압, 셀 편차
+        self.v_filt = None
         self.measure()
 
     def go(self, state):
@@ -158,13 +164,20 @@ class Device:
         self.fan_rpm = self.p.read_fan_rpm()
         self.cell_count = sum(v > 2.5 for v in self.cells)   # detectCellCount
         self.pack_v = sum(self.cells)
+        # 약 1초 이동평균. 불균형 경고·밸런싱 판정용 (순간값은 노이즈로 셀 편차가 ±6mV 흔들린다)
+        if self.cell_count == 0 or self.v_filt is None:
+            self.v_filt = list(self.cells)
+        else:
+            self.v_filt = [f + 0.1 * (c - f) for f, c in zip(self.v_filt, self.cells)]
 
     def check_alarms(self):
         a = []
         if self.cell_count == 0:
             a.append("CONN")
         else:
-            if max(self.cells) - min(self.cells) > IMBALANCE_V:
+            # 이동평균 + 히스테리시스: 켜진 뒤엔 10mV 더 내려가야 꺼진다. 없으면 기준 근처에서 경고음이 반복된다
+            on = "IMBALANCE" in self.alarms
+            if max(self.v_filt) - min(self.v_filt) > IMBALANCE_V - (0.010 if on else 0.0):
                 a.append("IMBALANCE")
             if min(self.cells) < V_CUTOFF:
                 a.append("UNDERVOLT")
@@ -211,7 +224,7 @@ class Device:
     def outputs_off(self):
         self.duty = self.integ = 0.0
         self.bal = [False] * len(self.bal)
-        self.limit = self.rest_t = self.v_avg = None
+        self.limit = self.rest_t = None
 
     def finish(self):
         self.outputs_off()
@@ -221,6 +234,20 @@ class Device:
                 self.soh = compute_soh(self.ir, max(self.cells) - min(self.cells), self.cap_ratio())
         self.go("DONE")
         self.events.append("DONE")
+
+    def progress(self):
+        """OLED·웹 진행 막대용 0~1. 보관·용량은 전압, 밸런싱은 셀 편차 기준."""
+        if self.state == "DONE":
+            return 1.0
+        if self.state != "RUN" or self.v0 is None:
+            return None
+        lo = min(self.cells)
+        if self.mode == "BALANCE":
+            span, done = self.d0 - BAL_DONE_V, self.d0 - (max(self.cells) - lo)
+        else:
+            end = CAP_END_V if self.mode == "CAPACITY" else self.target_v
+            span, done = self.v0 - end, self.v0 - lo
+        return round(clamp(done / span, 0.0, 1.0), 3) if span > 0 else None
 
     def cap_ratio(self):
         return None if self.cap_measured is None else self.cap_measured / self.capacity_ah
@@ -291,13 +318,11 @@ class Device:
 
     def balance_step(self):
         """BQ76952 내장 밸런싱: 최저 셀보다 높은 셀만 소량 방전. 메인 부하는 쓰지 않는다."""
-        # 판정은 약 1초 이동평균으로. 순간값은 노이즈로 편차가 작게 보여 일찍 끝난다
-        a = self.v_avg or self.cells
-        self.v_avg = [x + 0.1 * (c - x) for x, c in zip(a, self.cells)]
-        min_v = min(self.v_avg)
-        if max(self.v_avg) - min_v <= BAL_DONE_V:
+        # 판정은 이동평균으로. 순간값은 노이즈로 편차가 작게 보여 일찍 끝난다
+        min_v = min(self.v_filt)
+        if max(self.v_filt) - min_v <= BAL_DONE_V:
             return self.finish()
-        self.bal = [v - min_v > BAL_ON_V for v in self.v_avg]
+        self.bal = [v - min_v > BAL_ON_V for v in self.v_filt]
 
     def capacity_step(self):
         """정전력 방전하며 전하량 적산, 최저 셀이 종료 전압에 닿으면 용량 확정."""
@@ -339,6 +364,8 @@ class Device:
             self.outputs_off()
             self.trip = None
             self.cap_acc = 0.0
+            lo = min(self.cells)
+            self.run_t0, self.v0, self.d0 = self.t, lo, max(self.cells) - lo
             self.go("DIAG" if mode == "DIAG" else "RUN")
             self.events.append("START")
             return None
@@ -362,7 +389,10 @@ class Device:
             "duty": round(self.duty, 3),
             "tempBatt": round(self.temp_batt, 1), "tempSink": round(self.temp_sink, 1),
             "fanRpm": round(self.fan_rpm),
-            "limit": self.limit, "targetV": self.target_v, "soh": self.soh,
+            # 용량 테스트에서는 종료 전압을 targetV로 보낸다 (웹 진행률 계산용)
+            "limit": self.limit, "targetV": CAP_END_V if self.mode == "CAPACITY" else self.target_v,
+            "soh": self.soh, "bal": self.bal, "progress": self.progress(),
+            "elapsed": round(self.t - self.run_t0, 1) if self.state == "RUN" else None,
             "ir": self.ir,
             "capMeasuredAh": None if self.cap_measured is None else round(self.cap_measured, 3),
             "alarms": sorted(alarms), "events": self.events,
@@ -400,17 +430,19 @@ async def serve(dev, speed, port):
 
     app = web.Application()
     app.router.add_get("/ws", ws_handler)
+    app.router.add_get("/", lambda _: web.FileResponse(WEB_DIR / "index.html"))
+    app.router.add_static("/", WEB_DIR)
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, "localhost", port).start()
-    print(f"ws://localhost:{port}/ws  배속 x{speed}  (Ctrl+C 종료)")
+    print(f"http://localhost:{port}/  배속 x{speed}  (Ctrl+C 종료)")
     tick = 0
     while True:
         for _ in range(speed):
             dev.step()
         tick += 1
         if tick % 2 == 0:   # 실시간 5Hz 상태 전송
-            text = json.dumps(dev.status())
+            text = json.dumps({**dev.status(), "sim": True})   # 웹이 결함 주입 패널을 보일지 판단
             for ws in list(clients):
                 try:
                     await ws.send_str(text)

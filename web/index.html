@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스마트 배터리 관리 디바이스</title>
+<script src="chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0f17; --card: #121826; --card2: #182032; --line: #243049; --text: #e6e9ef; --muted: #8b97ad;
+    --accent: #facc15; --ok: #22c55e; --warn: #f59e0b; --bad: #ef4444; --info: #60a5fa;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, "Malgun Gothic", sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  header {
+    position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+    padding: 10px 18px; background: #070a10; border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; color: var(--muted); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); display: inline-block; margin-right: 6px; }
+  .dot.on { background: var(--ok); }
+  #conn { font-size: 13px; color: var(--muted); }
+  .code { display: flex; align-items: baseline; gap: 6px; }
+  .code b { font-family: Consolas, monospace; font-size: 20px; letter-spacing: .5px; }
+  .code small { color: var(--muted); font-size: 13px; }
+  .spacer { flex: 1; }
+  #time { font-family: Consolas, monospace; color: var(--muted); }
+  #stop {
+    padding: 10px 30px; border: 0; border-radius: 8px; background: var(--bad); color: #fff;
+    font-size: 17px; font-weight: 800; letter-spacing: 1px; cursor: pointer;
+  }
+  #stop:hover { filter: brightness(1.1); }
+  #alarm {
+    position: sticky; top: 57px; z-index: 9; padding: 10px 18px; background: #3b0d0d; color: #fecaca;
+    border-bottom: 1px solid var(--bad); font-weight: 700;
+  }
+
+  main {
+    display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px;
+    max-width: 1320px; margin: 0 auto; padding: 14px 18px 28px;
+  }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .card h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .3px; }
+  .s8 { grid-column: span 8; } .s4 { grid-column: span 4; } .s6 { grid-column: span 6; } .s12 { grid-column: span 12; }
+  @media (max-width: 960px) { .s8, .s4, .s6 { grid-column: span 12; } }
+
+  /* 진행 영역 */
+  .hero-title { display: flex; align-items: baseline; gap: 10px; }
+  .hero-title b { font-size: 22px; }
+  .hero-title span { color: var(--muted); }
+  #pct { margin-left: auto; font-size: 34px; font-weight: 800; color: var(--accent); }
+  .track { height: 14px; margin: 10px 0 16px; background: var(--card2); border-radius: 7px; overflow: hidden; }
+  .track i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 7px; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .metric { background: var(--card2); border-radius: 10px; padding: 10px 12px; }
+  .metric small { display: block; color: var(--muted); font-size: 12px; }
+  .metric b { font-size: 24px; font-weight: 700; }
+  .metric em { font-style: normal; color: var(--muted); font-size: 14px; margin-left: 3px; }
+  #heroNote { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+
+  /* OLED 미러 */
+  .oled-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .oled-bezel { padding: 10px; background: #000; border-radius: 8px; border: 2px solid #2a2f3a; }
+  #oled { display: block; width: 384px; max-width: 100%; image-rendering: pixelated; }
+  .oled-btns { display: flex; gap: 8px; }
+  .oled-btns button { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--card2); color: var(--text); cursor: pointer; font-family: Consolas, monospace; }
+
+  /* 셀 */
+  .cells-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  #delta { font-size: 22px; font-weight: 800; }
+  #delta.ok { color: var(--ok); } #delta.warn { color: var(--warn); } #delta.bad { color: var(--bad); }
+  #cellsNote { color: var(--muted); font-size: 13px; }
+  .cells { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .cell { background: var(--card2); border-radius: 10px; padding: 9px 11px; border: 1px solid transparent; }
+  .cell.max { border-color: #7c5cff; } .cell.min { border-color: var(--info); }
+  .cell .top { display: flex; align-items: baseline; justify-content: space-between; }
+  .cell .lab { color: var(--muted); font-family: Consolas, monospace; white-space: nowrap; }
+  .cell .mk { margin-left: 3px; font-size: 12px; }
+  .cell.max .mk { color: #a78bfa; } .cell.min .mk { color: var(--info); }
+  .cell .v { font-size: 20px; font-weight: 700; }
+  .cell .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
+  .tag.hi { background: #2e2465; color: #c4b5fd; } .tag.lo { background: #12305a; color: #93c5fd; } .tag.bal { background: #3d3410; color: var(--accent); }
+  .dev { position: relative; height: 6px; margin: 8px 0 5px; background: #0e1420; border-radius: 3px; }
+  .dev i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--info); border-radius: 3px; }
+  .cell .sub { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+
+  /* 수치 */
+  dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 0; }
+  dl.kv dt { color: var(--muted); font-size: 14px; }
+  dl.kv dd { margin: 0; font-weight: 600; text-align: right; }
+  #soh { font-size: 44px; font-weight: 800; line-height: 1; }
+  #soh small { font-size: 16px; color: var(--muted); font-weight: 500; }
+
+  .chart-box { position: relative; height: 240px; }
+
+  /* 조작 */
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label {
+    display: block; padding: 9px 4px; text-align: center; border-radius: 8px; background: var(--card2);
+    border: 1px solid var(--line); cursor: pointer; font-size: 14px;
+  }
+  .seg label code { display: block; font-size: 11px; color: var(--muted); }
+  .seg input:checked + label { border-color: var(--accent); background: #2a250c; }
+  .seg input:focus-visible + label { outline: 2px solid var(--accent); }
+  .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; color: var(--muted); font-size: 14px; }
+  .field select, .field input {
+    width: 150px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--card2); color: var(--text); font-size: 15px;
+  }
+  .field select:disabled { opacity: .4; }
+  button.go {
+    width: 100%; margin-top: 8px; padding: 11px; border: 0; border-radius: 8px; background: var(--accent); color: #1a1600;
+    font-size: 16px; font-weight: 800; cursor: pointer;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  button.sub {
+    padding: 7px 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--card2); color: var(--text); font-size: 13px; cursor: pointer;
+  }
+  .toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .note { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+  ol.log { list-style: none; margin: 0; padding: 0; max-height: 250px; overflow: auto; font-size: 13px; }
+  ol.log li { padding: 5px 0; border-bottom: 1px solid var(--line); }
+  ol.log time { color: var(--muted); font-family: Consolas, monospace; margin-right: 8px; }
+  ol.log .err { color: #fca5a5; }
+</style>
+</head>
+<body>
+<header>
+  <h1>스마트 배터리 관리 디바이스</h1>
+  <span id="conn"><span class="dot"></span>연결 끊김</span>
+  <span class="code"><b id="stateCode">-</b><small id="stateKo"></small></span>
+  <span class="code"><b id="modeCode">-</b><small id="modeKo"></small></span>
+  <span class="spacer"></span>
+  <span id="time" class="num">0:00:00</span>
+  <button id="stop" type="button">STOP 정지</button>
+</header>
+<div id="alarm" role="alert" hidden></div>
+
+<main>
+  <section class="card s8">
+    <div class="hero-title"><b id="heroTitle">-</b><span id="heroSub"></span><span id="pct" class="num"></span></div>
+    <div class="track"><i id="bar"></i></div>
+    <div class="metrics">
+      <div class="metric"><small>전력</small><b class="num" id="mP">-</b><em>W</em></div>
+      <div class="metric"><small>전류</small><b class="num" id="mI">-</b><em>A</em></div>
+      <div class="metric"><small>팩 전압</small><b class="num" id="mV">-</b><em>V</em></div>
+      <div class="metric"><small>남은 시간</small><b class="num" id="mEta">-</b></div>
+    </div>
+    <p id="heroNote"></p>
+  </section>
+
+  <section class="card s4">
+    <h2>장비 OLED 화면</h2>
+    <div class="oled-wrap">
+      <div class="oled-bezel"><canvas id="oled" width="128" height="64"></canvas></div>
+      <div class="oled-btns"><button type="button" id="oledNext">NEXT 화면 전환</button></div>
+    </div>
+  </section>
+
+  <section class="card s12">
+    <div class="cells-head">
+      <h2 style="margin:0">셀 전압</h2>
+      <span id="delta" class="num">-</span>
+      <span id="cellsNote"></span>
+    </div>
+    <div class="cells" id="cells"></div>
+  </section>
+
+  <section class="card s4">
+    <h2>온도와 냉각</h2>
+    <dl class="kv num">
+      <dt>배터리</dt><dd id="tBatt">-</dd>
+      <dt>방열판</dt><dd id="tSink">-</dd>
+      <dt>팬</dt><dd id="fan">-</dd>
+      <dt>PWM 듀티</dt><dd id="duty">-</dd>
+    </dl>
+    <p class="note">보호 기준은 배터리 45°C, 방열판 70°C, 셀 3.5V이며 고정값입니다.</p>
+  </section>
+
+  <section class="card s4">
+    <h2>건강도 진단</h2>
+    <div id="soh" class="num">-</div>
+    <dl class="kv num" style="margin-top:12px">
+      <dt>셀 내부저항</dt><dd id="irRange">-</dd>
+      <dt>측정 용량</dt><dd id="cap">-</dd>
+    </dl>
+  </section>
+
+  <section class="card s4">
+    <h2>이벤트</h2>
+    <ol class="log" id="log"></ol>
+  </section>
+
+  <section class="card s6">
+    <h2>팩 전압과 전류</h2>
+    <div class="chart-box"><canvas id="chartVI"></canvas></div>
+  </section>
+
+  <section class="card s6">
+    <h2>온도</h2>
+    <div class="chart-box"><canvas id="chartT"></canvas></div>
+  </section>
+
+  <section class="card s6">
+    <h2>모드 시작</h2>
+    <form id="startForm">
+      <div class="seg">
+        <input type="radio" name="mode" id="mS" value="STORAGE" checked><label for="mS">보관<code>STORAGE</code></label>
+        <input type="radio" name="mode" id="mB" value="BALANCE"><label for="mB">밸런싱<code>BALANCE</code></label>
+        <input type="radio" name="mode" id="mC" value="CAPACITY"><label for="mC">용량 테스트<code>CAPACITY</code></label>
+        <input type="radio" name="mode" id="mD" value="DIAG"><label for="mD">진단<code>DIAG</code></label>
+      </div>
+      <label class="field">목표 전압
+        <select id="targetSel">
+          <option value="3.80">셀당 3.80 V</option>
+          <option value="3.85">셀당 3.85 V</option>
+          <option value="3.90">셀당 3.90 V</option>
+        </select>
+      </label>
+      <label class="field">배터리 용량 <span><input type="number" id="capIn" value="2200" min="100" max="20000" step="100"> mAh</span></label>
+      <button class="go" type="submit">시작</button>
+    </form>
+  </section>
+
+  <section class="card s6">
+    <h2>설정</h2>
+    <label class="toggle"><input type="checkbox" id="keyTone" checked> 부저 버튼음</label>
+    <p class="note">정지음과 경고음은 끌 수 없습니다.</p>
+    <div id="faults" hidden>
+      <h2 style="margin-top:18px">결함 주입 · 시뮬레이션 전용</h2>
+      <div class="row">
+        <button class="sub" type="button" data-fault="imbalance">셀 불균형</button>
+        <button class="sub" type="button" data-fault="fan_stop">팬 정지</button>
+        <button class="sub" type="button" data-fault="overheat">과열</button>
+        <button class="sub" type="button" data-fault="disconnect">연결 불량</button>
+        <button class="sub" type="button" data-fault="clear">모두 해제</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+// 영문 코드는 장비 OLED와 같은 글자. 펌웨어·시뮬레이터의 키와 짝을 맞출 것
+const KO = {
+  state: { IDLE: '대기', DIAG: '진단', SELECT: '모드 선택', RUN: '실행', DONE: '완료', HOLD: '유지', STOP: '정지' },
+  mode: { STORAGE: '보관', BALANCE: '밸런싱', CAPACITY: '용량 테스트', DIAG: '진단' },
+  alarm: {
+    CONN: '연결 불량', IMBALANCE: '셀 불균형', UNDERVOLT: '셀 저전압',
+    OVERTEMP_BATT: '배터리 과열', OVERTEMP_SINK: '방열판 과열', FAN_STOP: '팬 정지',
+  },
+  limit: { I_P: '전력 한도', I_C: 'C-rate 한도', I_T: '온도 한도', I_V: '전압 한도', I_HW: '하드웨어 한도', REST: '휴지 중' },
+  event: { START: '모드 시작', DONE: '완료', STOP: '정지' },
+};
+const BAL_DONE_MV = 10;   // sim.py BAL_DONE_V와 같게
+const MAX_POINTS = 900;
+const $ = id => document.getElementById(id);
+const ko = (g, k) => (k && KO[g][k]) || '';
+const f = (x, d) => (x == null || Number.isNaN(x) ? '-' : x.toFixed(d));
+
+let ws, last = null, hist = [], oledView = 0;
+
+function clock(t) {
+  const s = Math.max(0, Math.floor(t)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function log(text, isErr) {
+  const li = document.createElement('li');
+  li.innerHTML = `<time>${clock(last ? last.t : 0)}</time>`;
+  li.append(text);
+  if (isErr) li.className = 'err';
+  $('log').prepend(li);
+  while ($('log').children.length > 30) $('log').lastChild.remove();
+}
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => { $('conn').innerHTML = '<span class="dot on"></span>연결됨'; };
+  ws.onclose = () => { $('conn').innerHTML = '<span class="dot"></span>연결 끊김'; setTimeout(connect, 1000); };
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'status') render(m);
+    else if (m.type === 'error') log(`명령 거부: ${m.msg}`, true);
+  };
+}
+
+function send(cmd) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'cmd', ...cmd }));
+  else log('장치와 연결되지 않아 명령을 보내지 못했습니다', true);
+}
+
+/* ---------- 그래프 ---------- */
+Chart.defaults.color = '#8b97ad';
+Chart.defaults.borderColor = '#243049';
+Chart.defaults.font.family = 'system-ui, "Malgun Gothic", sans-serif';
+function chart(canvas, sets, axes) {
+  return new Chart(canvas, {
+    type: 'line',
+    data: { datasets: sets.map(([label, color, yAxisID]) => ({
+      label, borderColor: color, backgroundColor: color, yAxisID, data: [], borderWidth: 2, pointRadius: 0, tension: 0.2,
+    })) },
+    options: {
+      animation: false, maintainAspectRatio: false, parsing: false, normalized: true,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      plugins: { legend: { labels: { boxWidth: 12, boxHeight: 2 } } },
+      scales: { x: { type: 'linear', title: { display: true, text: '경과 시간 (분)' } }, ...axes },
+    },
+  });
+}
+const chartVI = chart($('chartVI'), [['팩 전압', '#60a5fa', 'y'], ['전류', '#facc15', 'y1']], {
+  y: { position: 'left', title: { display: true, text: 'V' } },
+  y1: { position: 'right', title: { display: true, text: 'A' }, grid: { drawOnChartArea: false }, min: 0 },
+});
+const chartT = chart($('chartT'), [['배터리', '#22c55e', 'y'], ['방열판', '#f97316', 'y']], {
+  y: { title: { display: true, text: '°C' }, suggestedMin: 20, suggestedMax: 75 },
+});
+function clearCharts() { [chartVI, chartT].forEach(c => { c.data.datasets.forEach(d => { d.data = []; }); c.update('none'); }); }
+function push(c, x, ys) {
+  c.data.datasets.forEach((d, i) => { d.data.push({ x, y: ys[i] }); if (d.data.length > MAX_POINTS) d.data.shift(); });
+  c.update('none');
+}
+
+/* ---------- 남은 시간 ---------- */
+// 진행률은 장치가 보낸다. 최근 1~2분 진행 속도로 남은 시간만 추정
+function eta(p, t) {
+  hist.push([t, p]);
+  while (hist.length > 2 && t - hist[1][0] > 120) hist.shift();
+  const [t0, p0] = hist[0];
+  if (t - t0 < 60 || p <= p0) return null;
+  return (1 - p) * (t - t0) / (p - p0);
+}
+
+/* ---------- OLED 미러 (128x64, 1비트) ---------- */
+// 펌웨어 OLED 화면과 같은 배치. 한쪽을 바꾸면 다른 쪽도 고친다
+const oled = $('oled'), og = oled.getContext('2d');
+function oledFrame(s) {
+  const lines = [], title = t => lines.push({ t, title: true });
+  const prog = p => lines.push({ bar: p });
+  const lo = s.cells.length ? Math.min(...s.cells) : 0, hi = s.cells.length ? Math.max(...s.cells) : 0;
+  const views = s.state === 'RUN' ? 3 : 2;
+  const v = oledView % views;
+  if (v === 1 && s.cellCount) {
+    lines.push({ t: `CELLS   d=${Math.round((hi - lo) * 1000)}mV`, cells: true });
+    return lines;
+  }
+  if (s.state === 'RUN' && v === 0) {
+    title({ STORAGE: 'DISCHARGING', BALANCE: 'BALANCING', CAPACITY: 'CAP TEST' }[s.mode] || s.mode);
+    lines.push({ t: `I ${f(s.current, 2)}A P ${f(s.packV * s.current, 1)}W` });
+    lines.push({ t: s.mode === 'BALANCE' ? `d ${Math.round((hi - lo) * 1000)}mV  to 10mV` : `Vmin ${f(lo, 2)} tgt ${f(s.targetV, 2)}` });
+    lines.push({ t: `Time ${clock(s.elapsed || 0)}` });
+    prog(s.progress || 0);
+    return lines;
+  }
+  if (s.state === 'RUN') {   // v === 2
+    title(`${s.mode} MODE`);
+    lines.push({ t: `${s.cellCount}S  ${f(s.packV, 2)}V` });
+    lines.push({ t: `RUN ${Math.round(s.packV * s.current)}W ${f(s.current, 2)}A` });
+    lines.push({ t: `Bat ${Math.round(s.tempBatt)}C Load ${Math.round(s.tempSink)}C` });
+    lines.push({ t: 'NEXT:view STOP:end' });
+    return lines;
+  }
+  const head = { IDLE: 'CONNECT BATT', DIAG: 'DIAGNOSING', SELECT: 'SELECT MODE', DONE: 'DONE', HOLD: 'HOLD', STOP: 'STOPPED' }[s.state] || s.state;
+  title(head);
+  if (s.alarms.length) lines.push({ t: s.alarms[0] });
+  if (s.cellCount) lines.push({ t: `${s.cellCount}S  ${f(s.packV, 2)}V` });
+  if (s.soh != null) lines.push({ t: `SOH ${s.soh}  IR ${f(Math.max(...(s.ir || [0])), 1)}m` });
+  if (s.capMeasuredAh != null) lines.push({ t: `CAP ${Math.round(s.capMeasuredAh * 1000)}mAh` });
+  lines.push({ t: s.state === 'SELECT' ? 'NEXT:mode OK:start' : 'NEXT:view' });
+  return lines;
+}
+function drawOled(s) {
+  og.fillStyle = '#000'; og.fillRect(0, 0, 128, 64);
+  og.fillStyle = '#dfe9ff'; og.strokeStyle = '#dfe9ff';
+  og.textBaseline = 'top';
+  const lines = oledFrame(s);
+  let y = 0;
+  for (const L of lines) {
+    if (L.cells) {
+      og.font = '9px Consolas, monospace'; og.fillText(L.t, 1, 0);
+      const lo = Math.min(...s.cells), hi = Math.max(...s.cells), rows = s.cells.length, h = Math.floor(52 / rows);
+      s.cells.forEach((c, i) => {
+        const yy = 11 + i * h;
+        og.fillText(`C${i + 1}`, 1, yy);
+        const w = 14 + Math.round(50 * (hi > lo ? (c - lo) / (hi - lo) : 1));
+        og.fillRect(16, yy + 1, w, h - 3);
+        og.fillText(c.toFixed(2), 96, yy);
+      });
+      break;
+    }
+    if (L.bar != null) {
+      og.strokeRect(1.5, y + 1.5, 125, 8); og.fillRect(3, y + 3, Math.round(122 * L.bar), 5);
+      y += 11; continue;
+    }
+    og.font = L.title ? '12px Consolas, monospace' : '9px Consolas, monospace';
+    og.fillText(L.t, 1, y);
+    y += L.title ? 13 : 10;
+    if (L.title) { og.fillRect(0, y - 1, 128, 1); y += 2; }
+  }
+  // 1비트로 만들어 실제 OLED처럼 보이게
+  const img = og.getImageData(0, 0, 128, 64), d = img.data;
+  for (let i = 0; i < d.length; i += 4) { const on = d[i] > 100; d[i] = on ? 223 : 0; d[i + 1] = on ? 233 : 0; d[i + 2] = on ? 255 : 0; d[i + 3] = 255; }
+  og.putImageData(img, 0, 0);
+}
+$('oledNext').onclick = () => { oledView++; if (last) drawOled(last); };
+
+/* ---------- 셀 ---------- */
+function renderCells(s) {
+  const box = $('cells');
+  if (box.children.length !== s.cells.length) {
+    box.innerHTML = s.cells.map((_, i) =>
+      `<div class="cell"><div class="top"><span class="lab">C${i + 1}<span class="tags"></span></span><span class="v num"></span></div>` +
+      '<div class="dev"><i></i></div><div class="sub"><span class="dv num"></span><span class="ir num"></span></div></div>'
+    ).join('');
+  }
+  if (!s.cellCount) {
+    $('delta').textContent = '-'; $('delta').className = 'num bad';
+    $('cellsNote').textContent = '셀 전압을 읽을 수 없습니다. 밸런스 잭 연결을 확인하세요.';
+  }
+  const lo = Math.min(...s.cells), hi = Math.max(...s.cells), dmv = (hi - lo) * 1000;
+  const scale = Math.max(dmv, 20);   // 막대는 최저 셀 대비 편차를 확대해서 보여 준다
+  [...box.children].forEach((el, i) => {
+    const v = s.cells[i], up = (v - lo) * 1000;
+    const marked = s.cellCount && dmv > BAL_DONE_MV;   // 균형 상태에선 최고·최저 표시 안 함
+    const isHi = marked && v === hi, isLo = marked && v === lo;
+    el.className = 'cell' + (isHi ? ' max' : isLo ? ' min' : '');
+    el.querySelector('.v').textContent = v.toFixed(3);
+    el.querySelector('.tags').innerHTML =
+      (isHi ? '<span class="mk" title="최고 셀">▲</span>' : isLo ? '<span class="mk" title="최저 셀">▼</span>' : '') +
+      (s.bal && s.bal[i] ? '<span class="tag bal" title="밸런싱 중">BAL</span>' : '');
+    el.querySelector('.dev i').style.width = `${Math.min(100, up / scale * 100)}%`;
+    el.querySelector('.dv').textContent = `+${up.toFixed(0)} mV`;
+    el.querySelector('.ir').textContent = s.ir ? `${s.ir[i].toFixed(1)} mΩ` : '';
+  });
+  if (s.cellCount) {
+    $('delta').textContent = `Δ ${dmv.toFixed(0)} mV`;
+    $('delta').className = 'num ' + (dmv <= BAL_DONE_MV ? 'ok' : dmv <= 50 ? 'warn' : 'bad');
+    $('cellsNote').textContent = `${s.cellCount}S 연결 · 막대는 최저 셀보다 높은 정도 · ▲최고 ▼최저 BAL 밸런싱 중`;
+  }
+}
+
+/* ---------- 진행 영역 ---------- */
+function renderHero(s) {
+  const running = s.state === 'RUN';
+  const pc = s.progress;
+  $('heroTitle').textContent = running ? `${ko('mode', s.mode)} 진행` : ko('state', s.state) || s.state;
+  $('heroSub').textContent = running ? s.mode : s.state;
+  $('pct').textContent = running && pc != null ? `${Math.round(pc * 100)}%` : '';
+  $('bar').style.width = `${(pc || 0) * 100}%`;
+  $('mP').textContent = f(s.packV * s.current, 1);
+  $('mI').textContent = f(s.current, 2);
+  $('mV').textContent = f(s.packV, 2);
+  const left = running && pc != null ? eta(pc, s.elapsed) : null;
+  $('mEta').textContent = left == null ? '-' : `${Math.ceil(left / 60)}분`;
+  let note;
+  if (running) {
+    note = s.mode === 'BALANCE' ? '전압이 높은 셀만 BQ76952 내장 밸런싱으로 방전합니다.'
+      : s.limit ? `지금 걸린 한도: ${ko('limit', s.limit)}${s.mode === 'STORAGE' ? ` · 목표 셀당 ${f(s.targetV, 2)} V` : ` · 종료 셀당 ${f(s.targetV, 2)} V`}` : '';
+  } else {
+    note = {
+      IDLE: '배터리를 연결하면 자동으로 진단합니다.', DIAG: '펄스 부하로 셀별 내부저항을 재는 중입니다.',
+      SELECT: '아래에서 모드를 골라 시작하세요.', DONE: '작업을 마쳤습니다.', HOLD: '대기 중입니다. 결과는 오른쪽 아래에 있습니다.',
+      STOP: s.alarms.length ? `보호 동작으로 중단: ${s.alarms.map(a => ko('alarm', a) || a).join(', ')}` : '정지했습니다.',
+    }[s.state] || '';
+  }
+  $('heroNote').textContent = note;
+}
+
+function render(s) {
+  if ((last && s.t < last.t) || s.events.includes('START')) { clearCharts(); hist = []; }   // 새 작업 또는 장치 재시작
+
+  $('stateCode').textContent = s.state; $('stateKo').textContent = ko('state', s.state);
+  $('modeCode').textContent = s.mode || '-'; $('modeKo').textContent = ko('mode', s.mode);
+  $('time').textContent = clock(s.t);
+
+  const alarm = $('alarm');
+  alarm.hidden = !s.alarms.length;
+  alarm.textContent = '⚠ 경고: ' + s.alarms.map(a => `${ko('alarm', a)} ${a}`).join(' · ');
+
+  renderHero(s);
+  renderCells(s);
+  $('tBatt').textContent = `${f(s.tempBatt, 1)} °C`;
+  $('tSink').textContent = `${f(s.tempSink, 1)} °C`;
+  $('fan').textContent = s.fanRpm ? `${s.fanRpm} RPM` : '정지';
+  $('duty').textContent = `${f(s.duty * 100, 1)} %`;
+  $('soh').innerHTML = s.soh == null ? '-' : `${s.soh}<small> / 100점</small>`;
+  $('irRange').textContent = s.ir ? `${Math.min(...s.ir).toFixed(1)} ~ ${Math.max(...s.ir).toFixed(1)} mΩ` : '-';
+  $('cap').textContent = s.capMeasuredAh == null ? '측정 안 함' : `${Math.round(s.capMeasuredAh * 1000)} mAh`;
+  $('faults').hidden = !s.sim;
+
+  if (last && s.state !== last.state) log(`상태 ${s.state} ${ko('state', s.state)}`);
+  const prev = last ? last.alarms : [];
+  s.alarms.filter(a => !prev.includes(a)).forEach(a => log(`경고 ${a} ${ko('alarm', a)}`, true));
+  s.events.filter(e => KO.event[e]).forEach(e => log(`${e} ${ko('event', e)}`));
+
+  last = s;
+  drawOled(s);
+  if (s.elapsed != null) {   // 그래프는 실행 중인 작업만 그린다
+    push(chartVI, s.elapsed / 60, [s.packV, s.current]);
+    push(chartT, s.elapsed / 60, [s.tempBatt, s.tempSink]);
+  }
+}
+
+/* ---------- 조작 ---------- */
+$('stop').onclick = () => send({ cmd: 'stop' });
+$('keyTone').onchange = e => send({ cmd: 'set', key: 'buzzerKeyTone', value: e.target.checked });
+document.querySelectorAll('[data-fault]').forEach(b => { b.onclick = () => send({ cmd: 'fault', name: b.dataset.fault }); });
+const modeInputs = [...document.querySelectorAll('input[name=mode]')];
+const syncTarget = () => { $('targetSel').disabled = modeInputs.find(r => r.checked).value !== 'STORAGE'; };
+modeInputs.forEach(r => { r.onchange = syncTarget; });
+$('startForm').onsubmit = e => {
+  e.preventDefault();
+  const mode = modeInputs.find(r => r.checked).value;
+  const mah = Number($('capIn').value);
+  if (!(mah >= 100 && mah <= 20000)) return log('배터리 용량은 100~20000 mAh로 입력하세요', true);
+  send({ cmd: 'start', mode, targetV: Number($('targetSel').value), capacityAh: mah / 1000 });
+};
+
+connect();
+</script>
+</body>
+</html>

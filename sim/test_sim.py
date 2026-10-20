@@ -41,6 +41,7 @@ start(dev)
 run_until(dev, lambda: dev.t > 600, 700)
 p = dev.pack_v * dev.current_avg
 assert dev.limit == "I_P" and abs(p - 25) < 1.5, (dev.limit, p)
+assert 0 < dev.status()["progress"] < 1 and dev.status()["elapsed"] > 0
 run_until(dev, lambda: dev.state == "DONE", 3 * 3600)
 v = [ocv(s) for s in dev.p.soc]
 assert all(abs(x - 3.80) <= 0.05 for x in v), v
@@ -56,8 +57,7 @@ print(f"2 진단 통과: IR {min(dev.ir)}~{max(dev.ir)}mΩ, SOH {dev.soh}")
 # 3 밸런싱: 셀 1개 SOC −10% → 높은 셀만 방전해 편차 해소
 dev = ready_dev()
 cmd(dev, cmd="fault", name="imbalance")
-dev.step()
-assert "IMBALANCE" in dev.alarms, dev.alarms
+run_until(dev, lambda: "IMBALANCE" in dev.alarms, 5)   # 이동평균이라 약 1초 지연
 before = max(dev.cells) - min(dev.cells)
 start(dev, "BALANCE")
 dev.step()
@@ -65,6 +65,7 @@ assert dev.bal[0] is False and all(dev.bal[1:]) and dev.duty == 0, dev.bal
 run_until(dev, lambda: dev.state == "DONE", 8 * 3600)
 v = [ocv(s) for s in dev.p.soc]
 assert max(v) - min(v) <= 0.012, v
+assert dev.events.count("WARN") == 1, dev.events   # 50mV 기준을 지날 때 경고가 반복되지 않음
 print(f"3 밸런싱 통과: 편차 {before * 1000:.0f}mV → {(max(v) - min(v)) * 1000:.1f}mV, {dev.t / 3600:.1f}시간")
 
 # 4 용량 테스트: 측정 용량이 모델에서 종료 전압까지 뺄 수 있는 용량과 ±5%
