@@ -41,6 +41,11 @@ IMBALANCE_V = 0.05
 FAN_ON_T = 40.0
 DIAG_DUTY = 0.5       # IR 측정 펄스 듀티 (1초)
 DONE_HOLD_S = 5.0
+I_BAL = 0.05          # BQ76952 내장 밸런싱 전류 [확인 필요] 하드웨어 논의 때 확정
+BAL_ON_V = 0.005      # 최저 셀보다 이만큼 높은 셀을 밸런싱
+BAL_DONE_V = 0.010    # 셀 간 전압 차가 이 이하면 밸런싱 완료
+CAP_END_V = 3.60      # 용량 테스트 종료 전압 [확인 필요] 하드웨어 차단 3.5V보다 노이즈 여유를 둠
+MODES = ("STORAGE", "BALANCE", "CAPACITY", "DIAG")
 TRIP_ALARMS = {"CONN", "UNDERVOLT", "OVERTEMP_BATT", "OVERTEMP_SINK", "FAN_STOP"}
 
 
@@ -59,12 +64,13 @@ def derate(t, t0, t1):
     return clamp((t1 - t) / (t1 - t0), 0.0, 1.0)
 
 
-def compute_soh(ir_mohm, imbalance_v, capacity_ratio=1.0, cycles=0):
-    # 가중치·기준값은 실험 데이터 없이 정한 임의값 [확인 필요] (인수인계 7장 3)
+def compute_soh(ir_mohm, imbalance_v, cap_ratio=None):
+    # 가중치·기준값은 실험 데이터 없이 정한 임의값 [확인 필요]
     s_ir = clamp((25 - max(ir_mohm)) / 20, 0, 1)   # 5mΩ 새것 → 25mΩ 폐기 (추정)
     s_imb = clamp(1 - imbalance_v / 0.10, 0, 1)
-    s_cyc = clamp(1 - cycles / 300, 0, 1)
-    return round(100 * (0.4 * s_ir + 0.3 * capacity_ratio + 0.2 * s_imb + 0.1 * s_cyc))
+    if cap_ratio is None:   # 같은 연결에서 용량 테스트를 안 했을 때
+        return round(100 * (0.6 * s_ir + 0.4 * s_imb))
+    return round(100 * (0.4 * s_ir + 0.4 * clamp(cap_ratio, 0, 1) + 0.2 * s_imb))
 
 
 class Plant:
@@ -80,11 +86,12 @@ class Plant:
         self.fan_broken = False
         self.connected = True
 
-    def step(self, duty, fan_cmd, dt):
+    def step(self, duty, fan_cmd, bal, dt):
         i_on = sum(ocv(s) for s in self.soc) / (R_LOAD + sum(self.r))
         self.current = duty * i_on
         for k in range(len(self.soc)):
-            self.soc[k] -= self.current * dt / 3600 / CAPACITY_AH * 100
+            i_cell = self.current + (I_BAL if bal[k] else 0.0)   # 밸런싱 전류는 팩 전류에 안 잡힌다
+            self.soc[k] -= i_cell * dt / 3600 / CAPACITY_AH * 100
         self.fan = 0.0 if self.fan_broken else fan_cmd
         r_th = R_TH_NAT - (R_TH_NAT - R_TH_FAN) * self.fan
         p_load = duty * i_on ** 2 * R_LOAD
@@ -97,7 +104,7 @@ class Plant:
         elif name == "fan_stop":
             self.fan_broken = True
         elif name == "overheat":
-            self.t_amb = T_AMB + 25
+            self.t_amb = T_AMB + 15   # +25면 배터리 온도 45°C 차단이 먼저 걸려 방열판 감속을 못 본다
         elif name == "disconnect":
             self.connected = False
         elif name == "clear":
@@ -131,14 +138,14 @@ class Device:
         self.t = self.state_t = 0.0
         self.state = "IDLE"
         self.mode = None
-        self.battery_id = "B-01"
         self.target_v = 3.80
         self.capacity_ah = CAPACITY_AH
-        self.duty = self.integ = self.fan_duty = 0.0
+        self.duty = self.integ = self.fan_duty = self.cap_acc = 0.0
+        self.bal = [False] * len(plant.soc)
         self.limit = self.trip = self.rest_t = None
         self.alarms, self.events = [], []
         self.settings = {"buzzerKeyTone": True}
-        self.ir = self.soh = None
+        self.ir = self.soh = self.cap_measured = None
         self.measure()
 
     def go(self, state):
@@ -177,7 +184,9 @@ class Device:
             "I_P": P_TARGET / self.pack_v,
             "I_C": self.capacity_ah * C_RATE,
             "I_T": min(derate(self.temp_batt, 40, 45), derate(self.temp_sink, 55, 70)) * I_HW,
-            "I_V": clamp((min_v - self.target_v) / TAPER_V, TAPER_MIN, 1.0) * I_HW,
+            # 테이퍼는 보관 모드만. 용량 테스트는 종료 전압까지 정전력
+            "I_V": clamp((min_v - self.target_v) / TAPER_V, TAPER_MIN, 1.0) * I_HW
+                   if self.mode == "STORAGE" else I_HW,
             "I_HW": I_HW,
         }
         self.limit = min(limits, key=limits.get)
@@ -193,14 +202,31 @@ class Device:
 
     def halt(self, reason=None):
         """STOP 버튼·웹 정지·보호 동작 공통 경로. 즉시 듀티 0."""
-        self.duty = self.integ = 0.0
-        self.limit, self.rest_t, self.trip = None, None, reason
+        self.outputs_off()
+        self.trip = reason
         self.go("STOP")
         if reason is None:
             self.events.append("STOP")
 
+    def outputs_off(self):
+        self.duty = self.integ = 0.0
+        self.bal = [False] * len(self.bal)
+        self.limit = self.rest_t = self.v_avg = None
+
+    def finish(self):
+        self.outputs_off()
+        if self.mode == "CAPACITY":
+            self.cap_measured = self.cap_acc
+            if self.ir:
+                self.soh = compute_soh(self.ir, max(self.cells) - min(self.cells), self.cap_ratio())
+        self.go("DONE")
+        self.events.append("DONE")
+
+    def cap_ratio(self):
+        return None if self.cap_measured is None else self.cap_measured / self.capacity_ah
+
     def step(self):
-        self.p.step(self.duty, self.fan_duty, DT)
+        self.p.step(self.duty, self.fan_duty, self.bal, DT)
         self.t += DT
         self.measure()
         # 팬 정지 판정은 직전 주기에 실제로 낸 팬 명령 기준. 새 명령을 먼저 넣으면 켜는 순간 오판한다.
@@ -211,7 +237,8 @@ class Device:
         getattr(self, "on_" + self.state.lower())()
 
     def on_idle(self):
-        if self.cell_count > 0:
+        if self.cell_count > 0:   # 새 연결: 이전 배터리의 측정 용량은 버린다
+            self.cap_measured = None
             self.go("DIAG")
 
     def on_diag(self):
@@ -235,7 +262,7 @@ class Device:
             off = [sum(c) / len(c) for c in zip(*self.v_off)]
             on = [sum(c) / len(c) for c in zip(*self.v_on)]
             self.ir = [round((a - b) / i * 1000, 1) for a, b in zip(off, on)]
-            self.soh = compute_soh(self.ir, max(off) - min(off))
+            self.soh = compute_soh(self.ir, max(off) - min(off), self.cap_ratio())
             self.go("SELECT")
 
     def on_select(self):
@@ -246,6 +273,10 @@ class Device:
         trip = TRIP_ALARMS.intersection(self.alarms)
         if trip:
             return self.halt(sorted(trip)[0])
+        if self.mode == "BALANCE":
+            return self.balance_step()
+        if self.mode == "CAPACITY":
+            return self.capacity_step()
         if self.rest_t is None:
             if min(self.cells) <= self.target_v:
                 self.duty = self.integ = 0.0
@@ -256,9 +287,24 @@ class Device:
             if min(self.cells) > self.target_v + REST_MARGIN:
                 self.rest_t = None
             else:
-                self.limit = None
-                self.go("DONE")
-                self.events.append("DONE")
+                self.finish()
+
+    def balance_step(self):
+        """BQ76952 내장 밸런싱: 최저 셀보다 높은 셀만 소량 방전. 메인 부하는 쓰지 않는다."""
+        # 판정은 약 1초 이동평균으로. 순간값은 노이즈로 편차가 작게 보여 일찍 끝난다
+        a = self.v_avg or self.cells
+        self.v_avg = [x + 0.1 * (c - x) for x, c in zip(a, self.cells)]
+        min_v = min(self.v_avg)
+        if max(self.v_avg) - min_v <= BAL_DONE_V:
+            return self.finish()
+        self.bal = [v - min_v > BAL_ON_V for v in self.v_avg]
+
+    def capacity_step(self):
+        """정전력 방전하며 전하량 적산, 최저 셀이 종료 전압에 닿으면 용량 확정."""
+        self.cap_acc += self.current_avg * DT / 3600
+        if min(self.cells) <= CAP_END_V:
+            return self.finish()
+        self.control_step()
 
     def on_done(self):
         if self.t - self.state_t >= DONE_HOLD_S:
@@ -279,7 +325,7 @@ class Device:
             return None
         if cmd == "start":
             mode = msg.get("mode")
-            if mode not in ("STORAGE", "DIAG"):
+            if mode not in MODES:
                 return f"지원하지 않는 mode: {mode}"
             if self.state not in ("SELECT", "DONE", "HOLD", "STOP"):
                 return f"{self.state} 상태에서는 시작할 수 없음"
@@ -289,13 +335,11 @@ class Device:
             cap = msg.get("capacityAh", CAPACITY_AH)
             if not isinstance(cap, (int, float)) or isinstance(cap, bool) or not 0 < cap <= 20:
                 return "capacityAh는 0~20 사이 숫자여야 함"
-            bid = msg.get("batteryId", "B-01")
-            if not isinstance(bid, str) or not 0 < len(bid) <= 32:
-                return "batteryId는 1~32자 문자열이어야 함"
-            self.mode, self.target_v, self.capacity_ah, self.battery_id = mode, target, cap, bid
-            self.trip = self.rest_t = None
-            self.integ = 0.0
-            self.go("RUN" if mode == "STORAGE" else "DIAG")
+            self.mode, self.target_v, self.capacity_ah = mode, target, cap
+            self.outputs_off()
+            self.trip = None
+            self.cap_acc = 0.0
+            self.go("DIAG" if mode == "DIAG" else "RUN")
             self.events.append("START")
             return None
         if cmd == "set":
@@ -312,15 +356,16 @@ class Device:
         alarms = set(self.alarms) | ({self.trip} if self.trip else set())
         s = {
             "type": "status", "t": round(self.t, 1),
-            "state": self.state, "mode": self.mode, "batteryId": self.battery_id,
-            "cellCount": self.cell_count,
+            "state": self.state, "mode": self.mode, "cellCount": self.cell_count,
             "cells": [round(v, 3) for v in self.cells],
             "packV": round(self.pack_v, 2), "current": round(self.current_avg, 2),
             "duty": round(self.duty, 3),
             "tempBatt": round(self.temp_batt, 1), "tempSink": round(self.temp_sink, 1),
             "fanRpm": round(self.fan_rpm),
             "limit": self.limit, "targetV": self.target_v, "soh": self.soh,
-            "ir": self.ir, "alarms": sorted(alarms), "events": self.events,
+            "ir": self.ir,
+            "capMeasuredAh": None if self.cap_measured is None else round(self.cap_measured, 3),
+            "alarms": sorted(alarms), "events": self.events,
         }
         self.events = []
         return s
