@@ -142,6 +142,7 @@ class Device:
         self.t = self.state_t = 0.0
         self.state = "IDLE"
         self.mode = None
+        self.sel_mode = "STORAGE"   # 장치 OK 버튼으로 시작할 모드. 시뮬레이터엔 버튼이 없어 마지막 시작 모드를 따른다
         self.target_v = 3.80
         self.capacity_ah = CAPACITY_AH
         self.duty = self.integ = self.fan_duty = self.cap_acc = 0.0
@@ -165,7 +166,10 @@ class Device:
         self.cell_count = sum(v > 2.5 for v in self.cells)   # detectCellCount
         self.pack_v = sum(self.cells)
         # 약 1초 이동평균. 불균형 경고·밸런싱 판정용 (순간값은 노이즈로 셀 편차가 ±6mV 흔들린다)
-        if self.cell_count == 0 or self.v_filt is None:
+        # 끊기면 비운다. 0V를 남기면 재연결 후 약 3초간 평균이 0에서 올라와 셀 편차를 작게 본다
+        if self.cell_count == 0:
+            self.v_filt = None
+        elif self.v_filt is None:
             self.v_filt = list(self.cells)
         else:
             self.v_filt = [f + 0.1 * (c - f) for f, c in zip(self.v_filt, self.cells)]
@@ -360,7 +364,7 @@ class Device:
             cap = msg.get("capacityAh", CAPACITY_AH)
             if not isinstance(cap, (int, float)) or isinstance(cap, bool) or not 0 < cap <= 20:
                 return "capacityAh는 0~20 사이 숫자여야 함"
-            self.mode, self.target_v, self.capacity_ah = mode, target, cap
+            self.mode, self.sel_mode, self.target_v, self.capacity_ah = mode, mode, target, cap
             self.outputs_off()
             self.trip = None
             self.cap_acc = 0.0
@@ -383,7 +387,7 @@ class Device:
         alarms = set(self.alarms) | ({self.trip} if self.trip else set())
         s = {
             "type": "status", "t": round(self.t, 1),
-            "state": self.state, "mode": self.mode, "cellCount": self.cell_count,
+            "state": self.state, "mode": self.mode, "selMode": self.sel_mode, "cellCount": self.cell_count,
             "cells": [round(v, 3) for v in self.cells],
             "packV": round(self.pack_v, 2), "current": round(self.current_avg, 2),
             "duty": round(self.duty, 3),

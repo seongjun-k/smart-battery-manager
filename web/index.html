@@ -361,6 +361,14 @@ function oledFrame(s) {
     lines.push({ t: 'NEXT:view STOP:end' });
     return lines;
   }
+  if (s.state === 'SELECT') {   // NEXT로 고른 모드를 OK로 시작
+    title('SELECT MODE');
+    lines.push({ t: `> ${s.selMode}` });
+    lines.push({ t: `${s.cellCount}S  ${f(s.packV, 2)}V` });
+    lines.push({ t: s.alarms.length ? s.alarms[0] : `SOH ${s.soh ?? '-'}` });
+    lines.push({ t: 'NEXT:mode OK:start' });
+    return lines;
+  }
   const head = { IDLE: 'CONNECT BATT', DIAG: 'DIAGNOSING', SELECT: 'SELECT MODE', DONE: 'DONE', HOLD: 'HOLD', STOP: 'STOPPED' }[s.state] || s.state;
   title(head);
   if (s.alarms.length) lines.push({ t: s.alarms[0] });

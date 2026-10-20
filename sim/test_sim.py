@@ -111,7 +111,10 @@ cmd(dev, cmd="fault", name="disconnect")
 dev.step()
 s = dev.status()
 assert dev.duty == 0 and s["state"] == "STOP" and "CONN" in s["alarms"], s
-print("7 연결 불량 통과: 1주기 안에 듀티 0, CONN 경고")
+cmd(dev, cmd="fault", name="clear")
+dev.step()
+assert max(abs(f - c) for f, c in zip(dev.v_filt, dev.cells)) < 0.01, dev.v_filt   # 재연결 직후 평균이 0에서 시작하지 않음
+print("7 연결 불량 통과: 1주기 안에 듀티 0, CONN 경고, 재연결 후 필터 즉시 정상")
 
 # 8 정지: 웹 정지 명령 → 즉시 듀티 0
 dev = ready_dev(3)
