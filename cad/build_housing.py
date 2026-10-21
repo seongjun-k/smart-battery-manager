@@ -33,15 +33,19 @@ PCB_POSTS = ((15.5, 15.5), (119.5, 15.5), (18.0, 98.0), (119.5, 89.5))
 FAN = (T, 55.0, 10.5)            # x0, y0, z0. PCB 위로 띄우고 방열판 높이에 맞춤
 FAN_S, FAN_TH, FAN_HOLE = 40.0, 20.0, 32.0
 
-# ---- 방열판 Wakefield 657-15ABPE: PCB에 납땜 핀으로 세움. 핀이 팬 쪽(-X)을 향함 ----
+# ---- 방열판 Wakefield 657-15ABPE: PCB에 납땜 핀으로 세움 (카탈로그 도면, 압출 프로파일 6533) ----
+# 가운데 세로판(1.6mm) 양쪽 가운데 17.0mm가 소자 홈이고, 핀 묶음은 Y 양 끝에 있다. 솔더 핀은 세로판 중심선 위
 HS_X0, HS_YC = 26.0, 75.0
-HS_L, HS_W, HS_TH, HS_BASE = 38.1, 41.9, 25.4, 3.0   # 높이, 폭, 핀 포함 두께, 바닥판 두께(가정)
-HS_FINS = 9
+HS_L, HS_W, HS_TH, HS_WEB, HS_POCKET = 38.1, 41.9, 25.4, 1.6, 17.0   # 높이, 폭(Y), 두께(X), 세로판, 홈
+HS_FINS = 5                       # 한쪽 끝 핀 묶음의 판 수 (모양만)
+HS_HOLE_Z = 21.6                  # 장착 구멍 높이 (PCB 윗면 기준)
 
-# ---- 방전 저항 TEH100 (TO-247): 방열판 평평한 면(+X)에 나사 하나로 고정, 리드는 PCB에 바로 납땜 ----
+# ---- 방전 저항 TEH100 (TO-247): +X쪽 홈의 세로판 면에 M3 하나로 고정, 리드는 PCB에 바로 납땜 ----
 TO_W, TO_LEN, TO_T = 15.9, 20.8, 5.0   # 몸체 폭, 길이, 두께
 TO_PITCH = 10.16                       # 리드 간격 (Ohmite TEH100 데이터시트 9.90~10.42mm)
-TO_Z0 = PCB_Z + PCB_TH + 4.0           # 몸체 아래 끝 높이
+TO_HOLE = 5.33                         # 몸체 위 끝에서 구멍 중심 (데이터시트 5.07~5.59)
+TO_LEAD = 2.4                          # 몸체 뒷면에서 리드 중심 (데이터시트 2.15~2.67)
+TO_Z0 = PCB_Z + PCB_TH + HS_HOLE_Z - (TO_LEN - TO_HOLE)   # 몸체 아래 끝: 구멍을 방열판 구멍에 맞춘 높이
 
 # ---- 덮개 부품: OLED, 패널 버튼 ----
 OLED = (85.0, 20.0)              # 모듈 앞-왼쪽 모서리 (덮개 아래면에 붙음)
@@ -191,20 +195,22 @@ def ref_parts():
     out.append(p.save())
 
     zb = PCB_Z + PCB_TH
-    face = HS_X0 + HS_TH                     # 방열판 평평한 면 (+X)
+    web = HS_X0 + HS_TH / 2                  # 세로판 중심
+    face = web + HS_WEB / 2                  # 저항이 붙는 세로판 면 (+X)
     p = Part("ref_heatsink")
-    y0 = HS_YC - HS_W / 2
-    p.box(face - HS_BASE, y0, zb, face, y0 + HS_W, zb + HS_L)               # 바닥판
-    pitch = (HS_W - 1.2) / (HS_FINS - 1)
-    for i in range(HS_FINS):                                                # 핀: 팬 쪽으로 뻗음
-        y = y0 + i * pitch
-        p.box(HS_X0, y, zb, face - HS_BASE, y + 1.2, zb + HS_L)
+    y0, y1 = HS_YC - HS_W / 2, HS_YC + HS_W / 2
+    p.box(web - HS_WEB / 2, y0, zb, face, y1, zb + HS_L)                    # 세로판
+    end = (HS_W - HS_POCKET) / 2                                             # 한쪽 끝 핀 묶음 깊이
+    for ya, sgn in ((y0, 1), (y1, -1)):                                      # 양 끝 핀 묶음: X 방향 판
+        for i in range(HS_FINS):
+            y = ya + sgn * (i * (end - 1.2) / (HS_FINS - 1))
+            p.box(HS_X0, min(y, y + sgn * 1.2), zb, HS_X0 + HS_TH, max(y, y + sgn * 1.2), zb + HS_L)
     out.append(p.save())
 
     p = Part("ref_resistor")
     p.box(face, HS_YC - TO_W / 2, TO_Z0, face + TO_T, HS_YC + TO_W / 2, TO_Z0 + TO_LEN)          # 몸체
     for dy in (-TO_PITCH / 2, TO_PITCH / 2):                                                  # 리드
-        p.box(face + 2.2, HS_YC + dy - 0.6, zb, face + 2.8, HS_YC + dy + 0.6, TO_Z0)
+        p.box(face + TO_LEAD - 0.3, HS_YC + dy - 0.6, zb, face + TO_LEAD + 0.3, HS_YC + dy + 0.6, TO_Z0)
     out.append(p.save())
 
     p = Part("ref_oled")   # 덮개 아래면에 붙이고 케이블로 PCB에 잇는다

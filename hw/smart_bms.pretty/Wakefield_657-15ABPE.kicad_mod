@@ -2,10 +2,10 @@
 	(version 20241229)
 	(generator "gen_schematic")
 	(layer "F.Cu")
-	(descr "Wakefield 657-15ABPE heatsink, 41.9x25.4x38.1mm, 2 solder pins 2.4mm at 25.4mm")
+	(descr "Wakefield 657-15ABPE heatsink, 41.9x25.4x38.1mm, 2 solder pins 2.4mm at 25.4mm on the center web")
 	(tags "heatsink TO-247 657")
 	(property "Reference" "REF**"
-		(at -12.7 -22.45 0)
+		(at -6.35 -22.45 0)
 		(layer "F.SilkS")
 		(uuid "9b609f5a-1467-51d9-b88f-d59cd1d42813")
 		(effects
@@ -16,7 +16,7 @@
 		)
 	)
 	(property "Value" "657-15ABPE"
-		(at -12.7 22.45 0)
+		(at 0 22.45 0)
 		(layer "F.Fab")
 		(uuid "e302e7cb-f19f-5367-9ec2-0aeac5085310")
 		(effects
@@ -64,8 +64,8 @@
 	)
 	(attr through_hole)
 	(fp_rect
-		(start -23.9 -20.95)
-		(end 1.5 20.95)
+		(start -12.7 -20.95)
+		(end 12.7 20.95)
 		(stroke
 			(width 0.1)
 			(type solid)
@@ -74,37 +74,66 @@
 		(layer "F.Fab")
 		(uuid "9fff5642-c78f-53f4-ac4a-0221b026d902")
 	)
+	(fp_rect
+		(start -0.8 -8.5)
+		(end 0.8 8.5)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+		(uuid "112fbf3d-d979-5f44-9bb1-150277cc3ab1")
+	)
 	(fp_line
-		(start -1.5 -20.95)
-		(end -1.5 20.95)
+		(start -12.7 -8.5)
+		(end 12.7 -8.5)
 		(stroke
 			(width 0.1)
 			(type solid)
 		)
 		(layer "F.Fab")
-		(uuid "112fbf3d-d979-5f44-9bb1-150277cc3ab1")
+		(uuid "4bf47dc9-faba-538f-a7e7-0b3058237365")
+	)
+	(fp_line
+		(start -12.7 8.5)
+		(end 12.7 8.5)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "19f44a88-8040-5009-a94b-21c53755938d")
 	)
 	(fp_rect
-		(start -24.01 -21.06)
-		(end 1.61 21.06)
+		(start -12.81 -21.06)
+		(end 12.81 21.06)
 		(stroke
 			(width 0.12)
 			(type solid)
 		)
 		(fill no)
 		(layer "F.SilkS")
-		(uuid "4bf47dc9-faba-538f-a7e7-0b3058237365")
+		(uuid "0b6f7d21-d64d-5bce-b562-2950679dec33")
 	)
-	(fp_rect
-		(start -24.4 -21.45)
-		(end 2 21.45)
+	(fp_poly
+		(pts
+			(xy -12.95 -21.2)
+			(xy 12.95 -21.2)
+			(xy 12.95 -8.5)
+			(xy 0.8 -8.5)
+			(xy 0.8 8.5)
+			(xy 12.95 8.5)
+			(xy 12.95 21.2)
+			(xy -12.95 21.2)
+		)
 		(stroke
 			(width 0.05)
 			(type solid)
 		)
 		(fill no)
 		(layer "F.CrtYd")
-		(uuid "19f44a88-8040-5009-a94b-21c53755938d")
+		(uuid "73e7d34d-9295-5d83-971d-4df3ba6e6316")
 	)
 	(pad "1" thru_hole circle
 		(at 0 -12.7)
@@ -112,7 +141,7 @@
 		(drill 2.8)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
-		(uuid "0b6f7d21-d64d-5bce-b562-2950679dec33")
+		(uuid "6833237e-9c78-5daa-8941-da2a30011b60")
 	)
 	(pad "2" thru_hole circle
 		(at 0 12.7)
@@ -120,7 +149,7 @@
 		(drill 2.8)
 		(layers "*.Cu" "*.Mask")
 		(remove_unused_layers no)
-		(uuid "73e7d34d-9295-5d83-971d-4df3ba6e6316")
+		(uuid "5e1f6bf3-bc35-5de2-9d7e-96b3cfb4f423")
 	)
 	(embedded_fonts no)
 )

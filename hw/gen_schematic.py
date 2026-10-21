@@ -96,7 +96,7 @@ def uid(key=None):
 # (번호, 이름, 전기 종류, 쪽 L/R, 줄). 줄은 위에서부터 2.54mm 단위
 CUSTOM = {
     # TI SLUSE96A 표 5-1, RGR 20핀 QFN. EP(21)는 VSS
-    "BQ76907": dict(ref="U", fp="Package_DFN_QFN:QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm",
+    "BQ76907": dict(ref="U", fp="smart_bms:Texas_RGR0020A_VQFN-20-1EP_3.5x3.5mm_P0.5mm_EP2.05mm",
                     ds="https://www.ti.com/lit/ds/symlink/bq76907.pdf",
                     desc="2S-7S battery monitor and protector, I2C", w=10.16, pins=[
         ("18", "VC7", "input", "L", 0), ("19", "VC6", "input", "L", 1), ("20", "VC5", "input", "L", 2),
@@ -196,45 +196,79 @@ def write_footprints():
     d = os.path.join(HERE, PROJ + '.pretty')
     os.makedirs(d, exist_ok=True)
     # Ohmite TEH100 (rev 7/25-1): 리드 간격 9.90~10.42mm → 10.16mm, 리드 1.37~1.67 x 0.55~1.07mm → 대각 최대 1.98mm.
-    # 몸체 15.49~16.01 x 4.69~5.21mm, 리드 중심은 뒷면(방열판 쪽)에서 2.15~2.67mm. 원점은 1번 리드, 방열판 쪽이 -Y
+    # 몸체 15.49~16.01 x 4.69~5.21mm, 리드 중심은 뒷면(방열판 쪽)에서 2.15~2.67mm. 원점은 1번 리드, 방열판 쪽이 -Y.
+    # 몸체는 방열판 장착 구멍 높이에 맞춰 PCB 위 약 6mm에 떠 있으므로 코트야드는 리드 영역만 잡는다
     P, BW, BT, BACK = 10.16, 16.01, 5.21, 2.67
     x0, x1 = P / 2 - BW / 2, P / 2 + BW / 2
     teh = ['footprint', Q('TEH100_TO-247-2_Vertical_P10.16mm'), ['version', 20241229], ['generator', Q('gen_schematic')],
            ['layer', Q('F.Cu')], ['descr', Q('Ohmite TEH100 TO-247 2-lead power resistor, lead pitch 10.16mm (datasheet 9.90-10.42)')],
            ['tags', Q('TO-247 TEH100 resistor')],
-           fp_prop('Reference', 'REF**', P / 2, -BACK - 1.5, 'F.SilkS'),
+           fp_prop('Reference', 'REF**', P / 2, 3.2, 'F.SilkS'),
            fp_prop('Value', 'TEH100', P / 2, BT - BACK + 1.5, 'F.Fab'),
            fp_prop('Footprint', '', 0, 0, 'F.Fab', True), fp_prop('Datasheet', '', 0, 0, 'F.Fab', True),
            fp_prop('Description', '', 0, 0, 'F.Fab', True),
            ['attr', 'through_hole'],
            fp_rect(x0, -BACK, x1, BT - BACK, 'F.Fab', 0.1),
            fp_line(x0 + 1.5, -BACK, x0 + 1.5, BT - BACK, 'F.Fab', 0.1),
-           fp_rect(x0 - 0.11, -BACK - 0.11, x1 + 0.11, BT - BACK + 0.11, 'F.SilkS'),
-           fp_rect(x0 - 0.5, -BACK - 0.5, x1 + 0.5, BT - BACK + 0.5, 'F.CrtYd', 0.05),
-           # 패드 Y 크기는 방열판 면(리드에서 2.15mm)과 0.7mm 이상 떨어지게 3.4mm로 둔다
+           fp_line(-1.9, 2.0, -1.9, -2.0, 'F.SilkS'),
+           fp_rect(-2.1, -2.2, P + 2.1, 2.2, 'F.CrtYd', 0.05),
            fp_tht('1', 0, 0, 3.2, 3.4, 2.2, 'roundrect') + [['roundrect_rratio', 0.15]],
            fp_tht('2', P, 0, 3.2, 3.4, 2.2, 'oval'),
            ['embedded_fonts', 'no']]
-    # Wakefield 657 시리즈 도면: 솔더 핀 Ø0.093"(2.4mm) 2개, 간격 1.000"(25.4mm), 돌출 0.156"(4.0mm).
-    # 바닥 41.9 x 25.4mm. 핀의 두께 방향 위치는 도면에서 확정하지 못해 바닥판(두께 3mm 가정) 중심에 둔다 [확인 필요].
-    # 원점은 두 핀의 중앙, 바닥판 바깥면(저항이 붙는 면)이 +X
-    HL, HT, BASE = 41.9, 25.4, 3.0
+    # Wakefield 657 시리즈 도면(카탈로그 p.72, 압출 프로파일 6533): 바닥 41.9 x 25.4mm, 가운데 세로판 1.6mm,
+    # 세로판 양쪽 가운데 17.0mm가 소자 홈, 솔더 핀 Ø2.4mm 2개가 세로판 중심선 위 25.4mm 간격, 돌출 4.0mm.
+    # 원점은 두 핀의 중앙(세로판 중심). 저항은 +X쪽 홈의 세로판 면(x = 0.8)에 붙는다
+    HL, HT, WEB, POCKET = 41.9, 25.4, 1.6, 17.0
+    hx, hy, w = HT / 2, HL / 2, WEB / 2
+    crt = [(-hx - .25, -hy - .25), (hx + .25, -hy - .25), (hx + .25, -POCKET / 2), (w, -POCKET / 2),
+           (w, POCKET / 2), (hx + .25, POCKET / 2), (hx + .25, hy + .25), (-hx - .25, hy + .25)]
     hs = ['footprint', Q('Wakefield_657-15ABPE'), ['version', 20241229], ['generator', Q('gen_schematic')],
-          ['layer', Q('F.Cu')], ['descr', Q('Wakefield 657-15ABPE heatsink, 41.9x25.4x38.1mm, 2 solder pins 2.4mm at 25.4mm')],
+          ['layer', Q('F.Cu')], ['descr', Q('Wakefield 657-15ABPE heatsink, 41.9x25.4x38.1mm, 2 solder pins 2.4mm at 25.4mm on the center web')],
           ['tags', Q('heatsink TO-247 657')],
-          fp_prop('Reference', 'REF**', -HT / 2, -HL / 2 - 1.5, 'F.SilkS'),
-          fp_prop('Value', '657-15ABPE', -HT / 2, HL / 2 + 1.5, 'F.Fab'),
+          fp_prop('Reference', 'REF**', -hx / 2, -hy - 1.5, 'F.SilkS'),
+          fp_prop('Value', '657-15ABPE', 0, hy + 1.5, 'F.Fab'),
           fp_prop('Footprint', '', 0, 0, 'F.Fab', True), fp_prop('Datasheet', '', 0, 0, 'F.Fab', True),
           fp_prop('Description', '', 0, 0, 'F.Fab', True),
           ['attr', 'through_hole'],
-          fp_rect(BASE / 2 - HT, -HL / 2, BASE / 2, HL / 2, 'F.Fab', 0.1),
-          fp_line(-BASE / 2, -HL / 2, -BASE / 2, HL / 2, 'F.Fab', 0.1),
-          fp_rect(BASE / 2 - HT - 0.11, -HL / 2 - 0.11, BASE / 2 + 0.11, HL / 2 + 0.11, 'F.SilkS'),
-          fp_rect(BASE / 2 - HT - 0.5, -HL / 2 - 0.5, BASE / 2 + 0.5, HL / 2 + 0.5, 'F.CrtYd', 0.05),
+          fp_rect(-hx, -hy, hx, hy, 'F.Fab', 0.1),
+          fp_rect(-w, -POCKET / 2, w, POCKET / 2, 'F.Fab', 0.1),
+          fp_line(-hx, -POCKET / 2, hx, -POCKET / 2, 'F.Fab', 0.1),
+          fp_line(-hx, POCKET / 2, hx, POCKET / 2, 'F.Fab', 0.1),
+          fp_rect(-hx - 0.11, -hy - 0.11, hx + 0.11, hy + 0.11, 'F.SilkS'),
+          ['fp_poly', ['pts'] + [['xy', x, y] for x, y in crt], ['stroke', ['width', 0.05], ['type', 'solid']],
+           ['fill', 'no'], ['layer', Q('F.CrtYd')], ['uuid', Q(uid())]],
           fp_tht('1', 0, -12.7, 4.2, 4.2, 2.8, 'circle'),
           fp_tht('2', 0, 12.7, 4.2, 4.2, 2.8, 'circle'),
           ['embedded_fonts', 'no']]
-    for fp in (teh, hs):
+
+    # TI BQ76907 RGR0020A 랜드 패턴 예(DS SLUSE96A p.63): 패드 0.6 x 0.24mm, 마주 보는 패드 중심 간격 3.3mm,
+    # 피치 0.5mm, 노출 패드 2.05mm. 핀 번호는 왼쪽 위 1번부터 반시계
+    def smd(n, x, y, sx, sy):
+        return ['pad', Q(n), 'smd', 'roundrect', ['at', x, y], ['size', sx, sy], ['layers', Q('F.Cu'), Q('F.Mask'), Q('F.Paste')],
+                ['roundrect_rratio', 0.2], ['uuid', Q(uid())]]
+    pads, c = [], 1.65
+    for i in range(5):
+        o = -1.0 + 0.5 * i
+        pads += [smd(str(1 + i), -c, o, 0.6, 0.24), smd(str(6 + i), o, c, 0.24, 0.6),
+                 smd(str(11 + i), c, -o, 0.6, 0.24), smd(str(16 + i), -o, -c, 0.24, 0.6)]
+    pads.append(smd('21', 0, 0, 2.05, 2.05))
+    rgr = ['footprint', Q('Texas_RGR0020A_VQFN-20-1EP_3.5x3.5mm_P0.5mm_EP2.05mm'), ['version', 20241229], ['generator', Q('gen_schematic')],
+           ['layer', Q('F.Cu')], ['descr', Q('TI RGR0020A VQFN-20, land pattern example from BQ76907 datasheet SLUSE96A')],
+           ['tags', Q('VQFN RGR BQ76907')],
+           fp_prop('Reference', 'REF**', 0, -2.8, 'F.SilkS'),
+           fp_prop('Value', 'BQ76907', 0, 2.8, 'F.Fab'),
+           fp_prop('Footprint', '', 0, 0, 'F.Fab', True), fp_prop('Datasheet', '', 0, 0, 'F.Fab', True),
+           fp_prop('Description', '', 0, 0, 'F.Fab', True),
+           ['attr', 'smd'],
+           fp_rect(-1.75, -1.75, 1.75, 1.75, 'F.Fab', 0.1),
+           fp_line(-1.86, -1.4, -1.86, -1.86, 'F.SilkS'), fp_line(-1.86, -1.86, -1.4, -1.86, 'F.SilkS'),
+           fp_line(1.4, -1.86, 1.86, -1.86, 'F.SilkS'), fp_line(1.86, 1.4, 1.86, 1.86, 'F.SilkS'),
+           fp_line(1.86, 1.86, 1.4, 1.86, 'F.SilkS'), fp_line(-1.4, 1.86, -1.86, 1.86, 'F.SilkS'),
+           fp_rect(-2.2, -2.2, 2.2, 2.2, 'F.CrtYd', 0.05)] + pads + [
+           ['model', Q('${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm.step'),
+            ['offset', ['xyz', 0, 0, 0]], ['scale', ['xyz', 1, 1, 1]], ['rotate', ['xyz', 0, 0, 0]]],
+           ['embedded_fonts', 'no']]
+    for fp in (teh, hs, rgr):
         with open(os.path.join(d, fp[1] + '.kicad_mod'), 'w', encoding='utf-8', newline='\n') as f:
             f.write(dump(fp) + '\n')
 
@@ -310,7 +344,7 @@ PARTS = [
     # ---- 전원·보호 ----
     dict(ref="J1", lib="Connector_Generic:Conn_01x02", val="XT60PW-M", fp="Connector_AMASS:AMASS_XT60PW-M_1x02_P7.20mm_Horizontal",
          x=38.1, y=35.56, nets={"1": "GND", "2": "VPACK_IN"}),                       # 풋프린트 패드1이 -, 패드2가 +
-    two("F1", "Device:Fuse", "4A slow", "Fuse:Fuseholder_Littelfuse_Nano2_154x", 55.88, 38.1, "VPACK_IN", "VPACK"),
+    two("F1", "Device:Fuse", "0454004.MR 4A T", "Fuse:Fuse_Littelfuse-NANO2-451_453", 55.88, 38.1, "VPACK_IN", "VPACK"),
     dict(ref="D1", lib="Device:D_Zener", val="SMBJ26A", fp="Diode_SMD:D_SMB", x=78.74, y=38.1, nets={"1": "VPACK", "2": "GND"}),
     two("C42", CP, "100uF 50V", "Capacitor_SMD:CP_Elec_10x10.5", 93.98, 38.1, "VPACK", "GND"),
     two("C1", C, "4.7uF 50V", F1206C, 109.22, 38.1, "VPACK", "GND"),
@@ -373,7 +407,7 @@ PARTS = [
     two("C30", C, "1uF", F0603C, 381.0, 124.46, "REGOUT", "GND"),
     dict(ref="#FLG05", lib="power:PWR_FLAG", val="PWR_FLAG", fp="", x=393.7, y=96.52, nets={"1": "BAT"}),
     dict(ref="#FLG06", lib="power:PWR_FLAG", val="PWR_FLAG", fp="", x=393.7, y=121.92, nets={"1": "REGSRC"}),
-    two("RT1", "Device:Thermistor_NTC", "10k NTC 103AT", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+    two("RT1", "Device:Thermistor_NTC", "103AT-2", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
         228.6, 96.52, "TS", "GND"),
     two("C31", C, "470pF 50V", F0603C, 246.38, 96.52, "TS", "GND"),
     # SRP는 배터리 - 쪽, SRN은 부하 쪽. R19·R20은 RS1 패드에서 켈빈으로 분기한다
@@ -449,7 +483,7 @@ TEXTS = [
     (16.51, 160.02, 2.5, "3. 방전부"),
     (213.36, 160.02, 2.5, "4. MCU·UI"),
     (16.51, 144.78, 1.5, "XT60 → 퓨즈 → VPACK. 벅 LMR36015(400kHz, 표 10-1 값) 5V와 USB VBUS를 쇼트키 OR, LDO로 3.3V.\n"
-                        "SMBJ26A 클램프 약 42V는 BAT 절대 최대 40V보다 높다. D4·R17·C27로 완화 [확인 필요]."),
+                        "SMBJ26A 클램프 42.1V는 BAT·VC 단시간 정격 45V 안(DS 6.1, 서지 동안만). DC 최대 25.2V는 40V 안."),
     (340.36, 20.32, 1.5, "밸런스 7핀 결선 (TRM SLUUCJ0 표 5-8, 6셀 모드: VC4-VC3 단락)\n"
                          "핀1 VC0, 핀2 VC1, 핀3 VC2, 핀4 VC3·VC4, 핀5 VC5, 핀6 VC6, 핀7 VC7\n"
                          "변환 케이블 (배터리 B0~Bn → 장치 핀)\n"
@@ -461,9 +495,9 @@ TEXTS = [
                          "VC5~VC7은 VSS 대비 2V 이상에서 정확하다."),
     (213.36, 146.05, 1.5, "BQ76907 기본 OTP는 REGOUT 3.3V 켜짐이라 C30만 둔다. CHG는 쓰지 않는다. RT1은 방열판 저항 옆에 붙이는 리드형 NTC."),
     (16.51, 273.05, 1.5, "PWM FET Q2 → 보호 FET Q1(BQ76907 DSG) → 션트 RS1 → 배터리 -. R33은 두 FET가 꺼졌을 때 MID 전위를 고정해 Q2 Vgs를 -20V 안에 둔다.\n"
-                        "R30 TEH100 리드 간격 10.16mm(데이터시트 9.90~10.42). HS1 솔더 핀 Ø2.4mm, 간격 25.4mm, 두께 방향 위치 [확인 필요]."),
+                        "R30 TEH100 리드 간격 10.16mm(데이터시트 9.90~10.42), 방열판 가운데 세로판 면에 M3로 고정. HS1 솔더 핀 Ø2.4mm는 세로판 중심선 위 25.4mm 간격."),
     (213.36, 254.0, 1.5, "SW3~SW5(패널 버튼)와 OLED는 덮개에 달고 J5·J6 케이블로 잇는다. SW3~SW5는 PCB에 실장하지 않는다.\n"
-                         "팬 PWM은 3.3V로 직접 구동하고 딥슬립 중 LOW로 유지한다. NF-A4x20이 0%에서 멈추는지 [확인 필요]."),
+                         "팬 PWM은 3.3V로 직접 구동한다(Noctua: 3.3V/5V를 high, 0.8V 미만을 low로 인식). 딥슬립 중 LOW로 두면 0% PWM = 0rpm(NF-A4x20 5V PWM 사양)."),
 ]
 
 FRAMES = [(12.7, 12.7, 205.74, 152.4), (209.55, 12.7, 407.67, 152.4), (12.7, 156.21, 205.74, 284.48), (209.55, 156.21, 407.67, 259.08)]

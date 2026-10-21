@@ -5,7 +5,7 @@
 	(descr "Ohmite TEH100 TO-247 2-lead power resistor, lead pitch 10.16mm (datasheet 9.90-10.42)")
 	(tags "TO-247 TEH100 resistor")
 	(property "Reference" "REF**"
-		(at 5.08 -4.17 0)
+		(at 5.08 3.2 0)
 		(layer "F.SilkS")
 		(uuid "ae369df4-5609-5c03-a755-00b494a4babb")
 		(effects
@@ -84,20 +84,19 @@
 		(layer "F.Fab")
 		(uuid "c816da02-2ded-56a6-8216-8a103a95c8ee")
 	)
-	(fp_rect
-		(start -3.035 -2.78)
-		(end 13.195 2.65)
+	(fp_line
+		(start -1.9 2)
+		(end -1.9 -2)
 		(stroke
 			(width 0.12)
 			(type solid)
 		)
-		(fill no)
 		(layer "F.SilkS")
 		(uuid "ad40b46d-dd83-575e-9014-4852af1004ca")
 	)
 	(fp_rect
-		(start -3.425 -3.17)
-		(end 13.585 3.04)
+		(start -2.1 -2.2)
+		(end 12.26 2.2)
 		(stroke
 			(width 0.05)
 			(type solid)

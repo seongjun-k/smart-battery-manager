@@ -27,7 +27,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Package_DFN_QFN:QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm"
+		(property "Footprint" "smart_bms:Texas_RGR0020A_VQFN-20-1EP_3.5x3.5mm_P0.5mm_EP2.05mm"
 			(at 0 0 0)
 			(effects
 				(font
