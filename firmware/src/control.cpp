@@ -59,17 +59,15 @@ static void addEvent(Event e) {
   buzzerPlay(S[(int)e]);
 }
 
-// detectCellCount: 2.5V를 넘는 셀 수. 셀 벡터 길이는 가장 높은 번호의 연결된 셀까지.
-// 중간 셀이 빠지면 그 칸이 0V로 남아 UNDERVOLT로 걸린다.
+// detectCellCount: 2.5V를 넘는 셀 수. 셀 벡터 길이는 측정값이 있는 가장 높은 번호의 셀까지(sim은 전체 목록).
+// 방전된 셀은 낮은 값 그대로 남아 UNDERVOLT로 걸린다.
 static void measure() {
   float raw[MAX_CELLS];
   readCells(raw);
   int top = 0, cnt = 0;
   for (int i = 0; i < MAX_CELLS; i++) {
-    if (raw[i] > CELL_PRESENT_V) {
-      cnt++;
-      top = i + 1;
-    }
+    if (raw[i] > CELL_PRESENT_V) cnt++;
+    if (raw[i] > 0) top = i + 1;
   }
   g.cellCount = cnt;
   if (top > 0) g.nCells = top;   // 끊기면 마지막 길이를 유지해 웹 셀 카드 수가 흔들리지 않게 한다
@@ -312,6 +310,7 @@ static void onHold() {
 }
 
 void applyOutputs() {
+  setDischargeAllowed(g.state == State::RUN || g.state == State::DIAG);
   setLoadDuty(g.duty);
   setFanDuty(g.fanDuty);
   setBalance(g.bal, g.nCells);

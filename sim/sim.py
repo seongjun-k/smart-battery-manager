@@ -92,16 +92,18 @@ class Plant:
         self.fan = 0.0
         self.fan_broken = False
         self.connected = True
+        self.pwm_fet_short = False   # PWM FET 단락 (시험용, 웹 결함 버튼은 없음)
 
-    def step(self, duty, fan_cmd, bal, dt):
+    def step(self, duty, fan_cmd, bal, dt, dsg):
         i_on = sum(ocv(s) for s in self.soc) / (R_LOAD + sum(self.r))
-        self.current = duty * i_on
+        # 보호 FET(DSG)가 꺼지면 PWM FET 상태와 관계없이 전류가 끊긴다
+        self.current = (1.0 if self.pwm_fet_short else duty) * i_on if dsg else 0.0
         for k in range(len(self.soc)):
             i_cell = self.current + (I_BAL if bal[k] else 0.0)   # 밸런싱 전류는 팩 전류에 안 잡힌다
             self.soc[k] -= i_cell * dt / 3600 / CAPACITY_AH * 100
         self.fan = 0.0 if self.fan_broken else fan_cmd
         r_th = R_TH_NAT - (R_TH_NAT - R_TH_FAN) * self.fan
-        p_load = duty * i_on ** 2 * R_LOAD
+        p_load = self.current * i_on * R_LOAD
         self.t_sink += (p_load - (self.t_sink - self.t_amb) / r_th) * dt / C_TH
 
     def inject(self, name):
@@ -266,7 +268,8 @@ class Device:
         return None if self.cap_measured is None else self.cap_measured / self.capacity_ah
 
     def step(self):
-        self.p.step(self.duty, self.fan_duty, self.bal, DT)
+        # 펌웨어 applyOutputs의 setDischargeAllowed: 진단·실행 중에만 보호 FET를 켠다
+        self.p.step(self.duty, self.fan_duty, self.bal, DT, dsg=self.state in ("RUN", "DIAG"))
         self.t += DT
         self.measure()
         # 팬 정지 판정은 직전 주기에 실제로 낸 팬 명령 기준. 새 명령을 먼저 넣으면 켜는 순간 오판한다.

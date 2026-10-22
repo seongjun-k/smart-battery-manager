@@ -16518,7 +16518,7 @@
 				)
 			)
 		)
-		(property "Value" "24.9k"
+		(property "Value" "23.7k"
 			(at 0 1.429999 -90)
 			(unlocked yes)
 			(layer "F.SilkS")

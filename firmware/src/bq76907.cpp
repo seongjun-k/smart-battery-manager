@@ -79,11 +79,16 @@ constexpr uint32_t REINIT_MS = 2000;
 constexpr uint32_t BAL_REFRESH_MS = 5000;      // 호스트 밸런싱은 약 20초 뒤 자동 종료되므로 더 짧게 다시 보낸다 (TRM 10.1)
 constexpr int BQ_CHANNELS = 7;
 constexpr int COUNT_STABLE_READS = 2;          // 셀 수가 이 횟수만큼 더 같은 값으로 읽혀야 받아들인다 (커넥터 삽입 중 오판 방지)
+// 셀 수별로 실제 셀이 걸리는 채널 (DS 표 7-1, 비트 c-1 = 채널 c). 나머지 입력은 PCB와 변환 케이블이 단락해 0V다
+constexpr uint8_t CELL_PATTERN[MAX_CELLS + 1] = {0, 0, 0x41, 0x51, 0x55, 0x57, 0x77};
+constexpr int16_t CH_CONNECTED_MV = 500;       // 단락된 입력(0V 근처)과 방전된 실제 셀을 가르는 기준
+constexpr int16_t CH_MAX_MV = 4600;            // 한 셀로 나올 수 없는 값. 밸런스 선이 빠지면 이웃 채널에 두 셀 전압이 걸릴 수 있다 (추정)
 
 bool ready = false;
 uint32_t lastInitTry = 0;
 uint8_t cfgVcell = 7;                          // BQ에 쓴 Vcell Mode. 7 = 모든 입력이 실제 셀(미확정 포함)
 uint8_t chOf[MAX_CELLS] = {};                  // 배터리 셀 k+1이 읽힌 BQ 채널(1~7). 밸런싱 비트에 쓴다
+int8_t dsgSent = -1;                           // 마지막으로 FET_CONTROL에 쓴 DSG 허용 값. -1 = 다시 써야 함 (설정·재초기화 뒤)
 
 bool writeReg(uint8_t reg, const uint8_t *d, size_t n) {
   Wire.beginTransmission(BQ_ADDR);
@@ -162,14 +167,18 @@ bool readStatusCells(uint16_t &st, int16_t mv[BQ_CHANNELS]) {
   return true;
 }
 
-int countCells(const int16_t mv[BQ_CHANNELS], uint8_t *ch = nullptr) {
-  int n = 0;
-  for (int c = 0; c < BQ_CHANNELS; c++)
-    if (mv[c] > CELL_PRESENT_V * 1000.0f) {
-      if (ch) ch[n] = c + 1;
-      n++;
-    }
-  return n;
+// 연결된 채널 묶음이 표 7-1의 셀 수 패턴과 정확히 같을 때만 셀 수를 돌려준다. 아니면 0.
+// 중간 셀이 0.5V 밑이거나 선이 빠지면 패턴이 깨져 0(연결 불량)이 된다. 적은 셀 수로 잘못 읽어
+// Vcell Mode를 바꾸면 그 셀의 하드웨어 저전압 감시까지 꺼지기 때문이다
+int countCells(const int16_t mv[BQ_CHANNELS]) {
+  uint8_t mask = 0;
+  for (int c = 0; c < BQ_CHANNELS; c++) {
+    if (mv[c] > CH_MAX_MV) return 0;
+    if (mv[c] > CH_CONNECTED_MV) mask |= 1u << c;
+  }
+  for (int n = 2; n <= MAX_CELLS; n++)
+    if (mask == CELL_PATTERN[n]) return n;
+  return 0;
 }
 
 // 보호·FET·온도 설정을 한 번에 쓴다. CONFIG_UPDATE 중에는 보호와 측정이 멈추므로 DSG를 먼저 끈다 (TRM 8.6)
@@ -183,7 +192,7 @@ bool configure(int nCells) {
       {DM_POWER_CONFIG, 1, 0x30},
       {DM_DA_CONFIG, 2, 0x0000},          // TSMODE=0 서미스터, CC 상시 동작, 변환 2.93ms (TRM 12.2.1.5)
       {DM_VCELL_MODE, 1, vcell},
-      // FET Options: HOST_FETOFF_EN(6)=1 설정 중 DSG를 끄기 위해, FET_EN(2)=1 보호가 없으면 DSG를 자율로 켠다,
+      // FET Options: HOST_FETOFF_EN(6)=1 설정 중과 정지 상태에서 DSG를 끄기 위해, FET_EN(2)=1 보호가 없으면 DSG를 자율로 켠다,
       // SFET(3)=0 CHG를 쓰지 않으므로 바디 다이오드 보호를 끈다 (TRM 12.2.1.8)
       {DM_FET_OPTIONS, 1, 0x44},
       // 밸런싱 온도 차단은 쓰지 않는다. NTC가 배터리가 아니라 방열판에 있어 TS로 밸런싱을 막으면 안 된다 (TRM 12.2.2.2~3)
@@ -208,13 +217,12 @@ bool configure(int nCells) {
   };
 
   const uint8_t fetOff = 0x0C;   // CHG_OFF | DSG_OFF
-  const uint8_t fetAuto = 0x00;
   writeReg(CMD_FET_CONTROL, &fetOff, 1);
   bool ok = writeSub(SUB_SET_CFGUPDATE) && waitStatus(ST_CFGUPDATE, true);
   if (ok)
     for (const Dm &e : tbl) ok = writeVerifyDm(e) && ok;
   bool exited = writeSub(SUB_EXIT_CFGUPDATE) && waitStatus(ST_CFGUPDATE, false);   // 실패해도 반드시 빠져나가게 시도한다
-  writeReg(CMD_FET_CONTROL, &fetAuto, 1);
+  dsgSent = -1;   // DSG는 꺼 둔 채로 두고, 다음 setDischargeAllowed()가 상태 머신이 원하는 값으로 쓴다
   ok = ok && exited;
   if (ok) cfgVcell = vcell;
   return ok;
@@ -257,8 +265,8 @@ static bool ensureReady() {
   return ready;
 }
 
-// 7개 채널을 모두 읽어 2.5V를 넘는 채널을 아래부터 순서대로 배터리 셀 1~n으로 쓴다.
-// 6S 헤더는 채널 6이 PCB에서 단락돼 0V라 건너뛰고, 2S는 채널 1과 7이 실제 셀이다
+// 7개 채널을 모두 읽어 셀 수 패턴(표 7-1)의 채널을 아래부터 배터리 셀 1~n으로 쓴다.
+// 6S는 채널 4(VC3·VC4 단락)가 0V라 건너뛰고, 2S는 채널 1과 7이 실제 셀이다. 방전된 셀(0.5~2.5V)도 그대로 돌려줘 저전압 경고가 걸리게 한다
 void readCells(float v[MAX_CELLS]) {
   for (int i = 0; i < MAX_CELLS; i++) v[i] = 0;
   if (!ensureReady()) return;
@@ -270,21 +278,29 @@ void readCells(float v[MAX_CELLS]) {
     ready = false;
     return;
   }
-  uint8_t ch[BQ_CHANNELS];
-  const int n = countCells(mv, ch);
+  const int n = countCells(mv);
   static int lastN = -1, same = 0;
   same = n == lastN ? (same < 100 ? same + 1 : same) : 0;
   lastN = n;
   // 지원 범위(2~6S)가 아니거나 셀 수가 아직 흔들리면 0으로 돌려 연결 불량으로 처리한다 (7S, 1S, 삽입 중)
-  if (n < 2 || n > MAX_CELLS || same < COUNT_STABLE_READS) return;
+  if (n == 0 || same < COUNT_STABLE_READS) return;
   if (n != cfgVcell) {   // 셀 수가 바뀌었다. 쓰지 않는 입력의 0V가 저전압 보호에 걸리지 않게 Vcell Mode를 갱신
     if (!configure(n)) ready = false;
     return;
   }
-  for (int k = 0; k < n; k++) {
-    chOf[k] = ch[k];
-    v[k] = mv[ch[k] - 1] / 1000.0f;
-  }
+  for (int c = 0, k = 0; c < BQ_CHANNELS; c++)
+    if (CELL_PATTERN[n] & (1u << c)) {
+      chOf[k] = c + 1;
+      v[k++] = mv[c] / 1000.0f;
+    }
+}
+
+// 보호 FET(DSG)를 PWM과 따로 끈다. PWM FET가 단락되거나 드라이버가 고착돼도 정지·보호가 전류를 끊게 한다.
+// 허용이면 BQ가 자율 보호 조건에 따라 켠다 (FET_EN=1). 바뀔 때만 쓰고, 실패하면 다음 주기에 다시 쓴다
+void setDischargeAllowed(bool on) {
+  if (!ready || dsgSent == on) return;
+  const uint8_t v = on ? 0x00 : 0x0C;   // CHG_OFF | DSG_OFF (TRM 11.2.9)
+  if (writeReg(CMD_FET_CONTROL, &v, 1)) dsgSent = on;
 }
 
 float readCurrent() {

@@ -154,6 +154,19 @@ v = [ocv(s) for s in dev.p.soc]
 assert switched and dev.state == "DONE" and max(v) - min(v) <= 0.012 and all(abs(x - 3.80) <= 0.05 for x in v), (switched, dev.state, v)
 print(f"10 자동 밸런싱 통과: 보관 후 밸런싱 전환, 셀 OCV {min(v):.3f}~{max(v):.3f}V, {dev.t / 3600:.1f}시간")
 
+# 11 PWM FET 단락: 듀티 0으로는 전류가 안 끊긴다 → 정지 명령이 보호 FET(DSG)로 끊는다
+dev = ready_dev()
+start(dev)
+run_until(dev, lambda: dev.t > 120, 200)
+dev.p.pwm_fet_short = True
+run_until(dev, lambda: dev.current_avg > 4.5, 5)   # 6S 전체 인가 약 5A
+i_short = dev.current_avg
+cmd(dev, cmd="stop")
+dev.step()
+dev.step()   # 정지 다음 주기에 plant가 DSG 꺼짐을 반영하고, 그다음 측정에 나온다
+assert dev.state == "STOP" and dev.p.current == 0 and dev.current_avg < 0.05, (dev.state, dev.p.current, dev.current_avg)
+print(f"11 PWM FET 단락 통과: 단락 시 {i_short:.2f}A, 정지 후 보호 FET로 {dev.current_avg:.2f}A")
+
 # 명령 검증
 assert dev.command({"cmd": "start", "mode": "STORAGE", "targetV": 4.1}) is not None
 assert dev.command({"cmd": "start", "mode": "STORAGE", "capacityAh": True}) is not None

@@ -15,4 +15,5 @@ float readFanRpm();
 void setLoadDuty(float duty);                    // 0~1
 void setFanDuty(float duty);                     // 0~1
 void setBalance(const bool bal[MAX_CELLS], int n);   // bal[k] = 배터리 셀 k+1
+void setDischargeAllowed(bool on);               // 보호 FET. 진단·실행 중에만 켠다. PWM과 따로 끊는 두 번째 경로
 void buzzerPlay(Sound s);
