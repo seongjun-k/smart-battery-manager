@@ -73,7 +73,6 @@ OLED_S = 27.3
 OLED_WIN = (24.0, 13.0)          # 표시 창
 ROW_Y = OLED[1] + OLED_S / 2     # 조작부 줄: OLED 창 중심과 버튼 중심을 같은 Y에
 BTN_NEXT, BTN_OK, BTN_STOP = (49.0, ROW_Y), (63.0, ROW_Y), (86.0, ROW_Y)   # STOP은 앞-오른쪽 덮개 보스(x 97~)를 피한다
-LABEL_Y, LABEL_H = 6.3, 3.0      # 버튼 이름 글자 줄 (덮개 앞 가장자리 모깎기 R2 안쪽), 글자 높이
 BTN_D, STOP_D = 12.0, 16.0       # 패널 장착 구멍 지름
 
 # ---- 옆면 커넥터 (KiCad 좌표의 Y 구간 → 케이스 Y) ----
@@ -85,8 +84,7 @@ JST = (by(147.0), by(126.0))     # 오른쪽 벽 (J3 핀 y 129~144)
 BZ_KICAD = (191.2, 153.6)        # KiCad BZ1 위치 (원통 중심)
 BZ_D, BZ_T, BZ_TAB = 12.0, 4.0, (4.0, 8.5, 5.5)   # 지름, 두께, 탭 (중심에서 x 시작·끝, 폭)
 
-# 두 색 출력: 몸체 차콜, 덮개 밝은 회색. 새긴 글자는 바탕과 반대 색으로 채운다(출력 시 색 바꿈 또는 도료)
-INK_DARK, INK_LIGHT, INK_RED = (60, 62, 66), (205, 205, 200), (200, 35, 35)
+# 두 색 출력: 몸체 차콜, 덮개 밝은 회색
 COLORS = {"housing_bottom": (54, 56, 60), "housing_lid": (226, 226, 221), "ref_pcb": (20, 110, 60), "ref_stop": (200, 35, 35),
           "ref_fan": (120, 80, 50), "ref_resistor": (220, 170, 40), "ref_heatsink": (60, 60, 65), "ref_oled": (30, 30, 40),
           "ref_parts": (40, 40, 40), "ref_tall": (70, 70, 120)}
@@ -108,7 +106,6 @@ class Part:
         self.doc = w32.CastTo(doc, "PartDocument")
         self.cd = self.doc.ComponentDefinition
         self.first = True
-        self.inks = []
 
     def _plane(self, axis, offset):
         base = self.cd.WorkPlanes.Item({"x": 1, "y": 2, "z": 3}[axis])   # YZ, XZ, XY
@@ -164,45 +161,21 @@ class Part:
         """pred(모서리)가 참인 모서리를 d만큼 45° 모따기한다. 끝점은 ends(), 원은 circle()로 본다."""
         self.cd.Features.ChamferFeatures.AddUsingDistance(self._edges(pred), cm(d))
 
-    def text(self, o, u, v, s, size, ink, depth=0.4):
-        """o를 가운데로 u 방향으로 읽고 v가 위인 글자를 depth만큼 새긴다. u x v가 바깥을 향해야 바로 읽힌다."""
-        wps = [self.cd.WorkPoints.AddFixed(tg.CreatePoint(*(cm(c) for c in q)))
-               for q in (o, [a + b for a, b in zip(o, u)], [a + b for a, b in zip(o, v)])]
-        for w in wps:
-            w.Visible = False
-        wp = self.cd.WorkPlanes.AddByThreePoints(*wps)
-        wp.Visible = False
-        sk = self.cd.Sketches.Add(wp)
-        tb = sk.TextBoxes.AddFitted(sk.ModelToSketchSpace(tg.CreatePoint(*(cm(c) for c in o))), s)
-        tb.FormattedText = "<StyleOverride Font='Arial' FontSize='%.3f' Bold='True'>%s</StyleOverride>" % (cm(size), s)
-        tb.HorizontalJustification = C.kAlignTextCenter
-        tb.VerticalJustification = C.kAlignTextMiddle
-        coll = app.TransientObjects.CreateObjectCollection()
-        coll.Add(tb)
-        ed = self.cd.Features.ExtrudeFeatures.CreateExtrudeDefinition(sk.Profiles.AddForSolid(False, coll), C.kCutOperation)
-        ed.SetDistanceExtent(cm(2 * depth), C.kSymmetricExtentDirection)
-        self.inks.append((self.cd.Features.ExtrudeFeatures.Add(ed), ink))
-
     def rounded_block(self, z0, z1, r_vert, z_edge, r_edge):
         """바깥 외곽 블록: 세로 모서리 r_vert, z_edge 높이의 둘레 모서리 r_edge로 깎는다."""
         self.box(0, 0, z0, W, D, z1)
         self.fillet(r_vert, lambda a, b: near(a[0], b[0]) and near(a[1], b[1]))
         self.fillet(r_edge, lambda a, b: near(a[2], z_edge) and near(b[2], z_edge))
 
-    def _asset(self, key, rgb):
-        a = self.doc.Assets.Add(C.kAssetTypeAppearance, "Generic", key, key)
-        w32.CastTo(a.Item("generic_diffuse"), "ColorAssetValue").Value = app.TransientObjects.CreateColor(*rgb)
-        return a
-
     def save(self):
         rgb = COLORS.get(self.name)
-        try:   # 외관은 확인용이라 실패해도 형상은 저장한다
-            if rgb:
-                self.doc.ActiveAppearance = self._asset(self.name + "_c", rgb)
-            for i, (f, ink) in enumerate(self.inks):
-                f.Appearance = self._asset(f"{self.name}_ink{i}", ink)
-        except Exception as e:
-            print(f"{self.name}: 색 지정 실패 {e}")
+        if rgb:
+            try:
+                a = self.doc.Assets.Add(C.kAssetTypeAppearance, "Generic", self.name + "_c", self.name + "_c")
+                w32.CastTo(a.Item("generic_diffuse"), "ColorAssetValue").Value = app.TransientObjects.CreateColor(*rgb)
+                self.doc.ActiveAppearance = a
+            except Exception as e:   # 외관은 확인용이라 실패해도 형상은 저장한다
+                print(f"{self.name}: 색 지정 실패 {e}")
         path = os.path.join(HERE, self.name + ".ipt")
         self.doc.SaveAs(path, False)
         self.doc.Close(True)
@@ -292,12 +265,6 @@ def bottom():
     for x0, (y0, y1), h, r in ((-1, USB, 4.0, 1.5), (W - T - 1, XT60, 9.0, 1.0), (W - T - 1, JST, 7.0, 1.0)):
         p.box(x0, y0, zb - 0.5, x0 + T + 2, y1, zb + h, cut=True)
         p.fillet(r, rim_x([(y, z) for y in (y0, y1) for z in (zb - 0.5, zb + h)]))   # 구멍 네 귀를 둥글게
-    # 새긴 글자: 앞면 제품명, 옆면 단자 이름
-    p.text((W / 2, 0, H_SHELL - 14), (1, 0, 0), (0, 0, 1), "SMART BMS", 5.0, INK_LIGHT)
-    p.text((W / 2, 0, H_SHELL - 21), (1, 0, 0), (0, 0, 1), "LiPo 2S-6S", 3.0, INK_LIGHT)
-    p.text((0, sum(USB) / 2, zb + 9.0), (0, -1, 0), (0, 0, 1), "USB", 3.0, INK_LIGHT)
-    p.text((W, sum(XT60) / 2, zb + 13.0), (0, 1, 0), (0, 0, 1), "BAT", 3.0, INK_LIGHT)
-    p.text((W, sum(JST) / 2, zb + 13.0), (0, 1, 0), (0, 0, 1), "BAL", 3.0, INK_LIGHT)
     # 부저 소리 구멍: 탭 끝 소리 구멍 높이(부저 두께 가운데)에 지름 2mm 3개
     for dy in (-2.0, 0, 2.0):
         p.cyl("x", (by(BZ_KICAD[1]) + dy, zb + BZ_T / 2), 1.0, W - T - 1, W + 1, cut=True)
@@ -343,8 +310,6 @@ def lid():
     for (px, py), d in ((BTN_NEXT, BTN_D), (BTN_OK, BTN_D), (BTN_STOP, STOP_D)):
         p.cyl("z", (px, py), d / 2, H_SHELL - 1, H + 1, cut=True)
     p.chamfer(0.5, lambda e: (c := circle(e)) is not None and near(c[0][2], H) and (near(c[1], BTN_D / 2) or near(c[1], STOP_D / 2)))
-    for (px, _), name, ink in ((BTN_NEXT, "NEXT", INK_DARK), (BTN_OK, "OK", INK_DARK), (BTN_STOP, "STOP", INK_RED)):
-        p.text((px, LABEL_Y, H), (1, 0, 0), (0, 1, 0), name, LABEL_H, ink)
     return p.save()
 
 
