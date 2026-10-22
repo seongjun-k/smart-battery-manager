@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 860" width="1600" height="860" font-family="'Malgun Gothic', sans-serif">
+  <!-- 보고서 6장 데이터 흐름도 원본. dataflow.png 는 tools/export_figures.py 가 Chrome으로 만든다 -->
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e5484d"/></marker>
+    <marker id="v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c5cff"/></marker>
+    <style>
+      .t { font-size: 17px; font-weight: 700; fill: #1d1d1f; }
+      .s { font-size: 14px; fill: #4a4a4f; }
+      .c { font-family: Consolas, monospace; font-size: 14px; fill: #6b3fa0; }
+      .h { font-size: 15px; font-weight: 700; fill: #888; letter-spacing: 1px; }
+      .in { fill: #eef5ff; stroke: #3b82f6; stroke-width: 1.5; }
+      .sim { fill: #f6f6f7; stroke: #8a8a90; stroke-width: 1.5; stroke-dasharray: 6 4; }
+      .pr { fill: #fff8e6; stroke: #d4a017; stroke-width: 1.5; }
+      .out { fill: #eefaf2; stroke: #22a06b; stroke-width: 1.5; }
+      .web { fill: #f3efff; stroke: #7c5cff; stroke-width: 1.5; }
+      .ln { fill: none; stroke: #444; stroke-width: 1.6; marker-end: url(#a); }
+      .rd { fill: none; stroke: #e5484d; stroke-width: 2; marker-end: url(#r); }
+      .rdd { fill: none; stroke: #e5484d; stroke-width: 1.6; stroke-dasharray: 6 4; marker-end: url(#r); }
+      .vl { fill: none; stroke: #7c5cff; stroke-width: 1.8; marker-end: url(#v); }
+      .lab { font-size: 13px; fill: #555; }
+      .labr { font-size: 13px; fill: #e5484d; font-weight: 700; }
+      .labv { font-size: 13px; fill: #7c5cff; font-weight: 700; }
+    </style>
+  </defs>
+  <rect width="1600" height="860" fill="#fff"/>
+
+  <text class="h" x="40" y="44">입력과 측정</text>
+  <text class="h" x="470" y="44">처리: ESP32-S3 펌웨어 (시뮬레이터 sim.py도 같은 로직)</text>
+  <text class="h" x="1080" y="44">출력</text>
+
+  <!-- 입력 -->
+  <rect class="in" x="40" y="100" width="360" height="66" rx="8"/>
+  <text class="t" x="60" y="128">배터리 2S~6S LiPo</text>
+  <text class="s" x="60" y="151">XT60 방전 단자, 7핀 밸런스 잭</text>
+
+  <rect class="in" x="40" y="206" width="360" height="92" rx="8"/>
+  <text class="t" x="60" y="234">BQ76907 아날로그 프런트엔드</text>
+  <text class="s" x="60" y="258">셀 전압 7채널, 션트 전류</text>
+  <text class="s" x="60" y="280">방열판 NTC 온도, 하드웨어 보호</text>
+
+  <rect class="sim" x="40" y="338" width="360" height="110" rx="8"/>
+  <text class="t" x="60" y="366">가상 하드웨어 (Python)</text>
+  <text class="s" x="60" y="390">셀: OCV(SOC) − I × R</text>
+  <text class="s" x="60" y="412">방열판: 1차 열 모델, 측정 노이즈</text>
+  <text class="s" x="60" y="434">결함 주입: 불균형, 팬 정지, 과열 등</text>
+
+  <rect class="in" x="40" y="488" width="360" height="66" rx="8"/>
+  <text class="t" x="60" y="516">버튼 NEXT · OK · STOP</text>
+  <text class="s" x="60" y="539">STOP은 인터럽트, OK는 딥슬립 깨우기</text>
+
+  <line class="ln" x1="220" y1="166" x2="220" y2="204"/>
+
+  <!-- 처리 -->
+  <rect class="pr" x="470" y="100" width="540" height="78" rx="8"/>
+  <text class="t" x="490" y="128">측정 함수</text>
+  <text class="c" x="490" y="155">readCells()  readCurrent()  readTemp()</text>
+
+  <rect class="pr" x="470" y="208" width="540" height="88" rx="8"/>
+  <text class="t" x="490" y="236">신호 처리와 경고 판정</text>
+  <text class="s" x="490" y="259">셀 수 판별, 셀 전압 1초 이동평균</text>
+  <text class="s" x="490" y="281">저전압·불균형·과열·팬 정지·연결 불량·내부저항</text>
+
+  <rect class="pr" x="470" y="326" width="540" height="78" rx="8"/>
+  <text class="t" x="490" y="354">상태 머신 <tspan class="c">stateMachine()</tspan></text>
+  <text class="s" x="490" y="380">대기 → 진단 → 모드 선택 → 실행 → 완료 → 유지, 정지</text>
+
+  <rect class="pr" x="470" y="434" width="540" height="120" rx="8"/>
+  <text class="t" x="490" y="462">모드별 제어 <tspan class="s">100ms 주기, 전류 한도 중 최솟값 + PI</tspan></text>
+  <text class="c" x="490" y="488">computeISet() → controlStep()</text>
+  <text class="c" x="490" y="512">balanceStep()  capacityStep()</text>
+  <text class="c" x="490" y="536">estimateIR()  computeSOH()</text>
+
+  <rect class="pr" x="470" y="664" width="540" height="70" rx="8"/>
+  <text class="t" x="490" y="692">명령 처리 <tspan class="c">wsOnCommand()</tspan></text>
+  <text class="s" x="490" y="716">형식·상태 검증 후 상태 머신 이벤트로 넘김, 오류는 error 응답</text>
+
+  <!-- 입력 → 처리 -->
+  <polyline class="ln" points="400,252 435,252 435,139 468,139"/>
+  <text class="lab" x="408" y="196">I2C</text>
+  <polyline class="ln" points="400,393 445,393 445,160 468,160"/>
+  <text class="lab" x="220" y="470" text-anchor="middle">시뮬레이터는 BQ76907 대신 같은 함수로 값을 준다</text>
+  <polyline class="ln" points="400,521 450,521 450,380 468,380"/>
+  <line class="ln" x1="740" y1="178" x2="740" y2="206"/>
+  <line class="ln" x1="740" y1="296" x2="740" y2="324"/>
+  <line class="ln" x1="740" y1="404" x2="740" y2="432"/>
+  <polyline class="ln" points="470,699 458,699 458,392 468,392"/>
+
+  <!-- 출력 -->
+  <rect class="out" x="1080" y="100" width="480" height="78" rx="8"/>
+  <text class="t" x="1100" y="128">방전부</text>
+  <text class="s" x="1100" y="152">PWM → UCC27517 → MOSFET → TEH100 5Ω</text>
+  <text class="s" x="1100" y="171" font-size="13">방열판과 함께 열로 소모</text>
+
+  <rect class="out" x="1080" y="196" width="230" height="58" rx="8"/>
+  <text class="t" x="1098" y="222">팬 PWM</text>
+  <text class="s" x="1098" y="244">40°C부터 비례</text>
+  <rect class="out" x="1330" y="196" width="230" height="58" rx="8"/>
+  <text class="t" x="1348" y="222">셀 밸런싱</text>
+  <text class="s" x="1348" y="244">BQ76907 내장 스위치</text>
+
+  <rect class="out" x="1080" y="272" width="230" height="58" rx="8"/>
+  <text class="t" x="1098" y="298">부저</text>
+  <text class="c" x="1098" y="320">buzzerPlay(event)</text>
+  <rect class="out" x="1330" y="272" width="230" height="58" rx="8"/>
+  <text class="t" x="1348" y="298">OLED 128×64</text>
+  <text class="c" x="1348" y="320">oledUpdate()</text>
+
+  <rect class="web" x="1080" y="368" width="480" height="78" rx="8"/>
+  <text class="t" x="1100" y="396">상태 전송 <tspan class="c" fill="#6b3fa0">wsBroadcast()</tspan></text>
+  <text class="s" x="1100" y="420">상태 JSON 약 5Hz, WebSocket</text>
+
+  <rect class="web" x="1080" y="490" width="480" height="104" rx="8"/>
+  <text class="t" x="1100" y="518">웹 대시보드 (브라우저)</text>
+  <text class="s" x="1100" y="542">진행률, 전력·전류·전압, 셀 막대, 그래프</text>
+  <text class="s" x="1100" y="564">장비와 화소 단위로 같은 OLED 미러</text>
+  <text class="s" x="1100" y="586">모드 시작, 정지, 설정, 결함 주입(시뮬레이터만)</text>
+
+  <!-- 처리 → 출력 -->
+  <polyline class="ln" points="1010,470 1040,470 1040,139 1078,139"/>
+  <polyline class="ln" points="1040,225 1078,225"/>
+  <polyline class="ln" points="1010,512 1056,512 1056,186 1445,186 1445,194"/>
+  <polyline class="ln" points="1010,365 1062,365 1062,301 1078,301"/>
+  <polyline class="ln" points="1062,340 1445,340 1445,332"/>
+  <polyline class="ln" points="1010,395 1078,395"/>
+  <line class="vl" x1="1320" y1="446" x2="1320" y2="488"/>
+  <text class="labv" x="1330" y="472">WebSocket</text>
+
+  <!-- 명령 되돌림 -->
+  <polyline class="vl" points="1320,594 1320,700 1012,700"/>
+  <text class="labv" x="1030" y="690">명령 JSON: start · stop · set · fault</text>
+
+  <!-- STOP·하드웨어 보호 -->
+  <polyline class="rd" points="220,554 220,800 1582,800 1582,139 1562,139"/>
+  <text class="labr" x="240" y="790">STOP 버튼: 인터럽트가 상태 머신을 거치지 않고 방전 게이트를 바로 끈다</text>
+  <polyline class="rdd" points="40,252 22,252 22,78 1500,78 1500,98"/>
+  <text class="labr" x="560" y="72">하드웨어 보호: BQ76907이 셀 저전압·단락·과열에서 MCU와 별도로 보호 MOSFET을 끈다</text>
+</svg>

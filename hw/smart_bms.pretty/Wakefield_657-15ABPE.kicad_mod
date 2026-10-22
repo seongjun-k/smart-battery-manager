@@ -151,5 +151,16 @@
 		(remove_unused_layers no)
 		(uuid "5e1f6bf3-bc35-5de2-9d7e-96b3cfb4f423")
 	)
+	(model "${KIPRJMOD}/3d/Wakefield_657-15ABPE.wrl"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
 	(embedded_fonts no)
 )

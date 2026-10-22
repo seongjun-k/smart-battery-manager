@@ -122,5 +122,16 @@
 		(remove_unused_layers no)
 		(uuid "3e098c9c-47de-52e0-af96-11be3557717b")
 	)
+	(model "${KIPRJMOD}/3d/TEH100_TO-247.wrl"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
 	(embedded_fonts no)
 )

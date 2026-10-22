@@ -193,9 +193,41 @@ def fp_tht(n, x, y, sx, sy, drill, shape):
             ['layers', Q('*.Cu'), Q('*.Mask')], ['remove_unused_layers', 'no'], ['uuid', Q(uid())]]
 
 
+def write_wrl(path, parts):
+    """상자 여러 개로 된 VRML 3D 모델. parts = [(색 (r,g,b), [(x0,y0,z0,x1,y1,z1), ...]), ...], 풋프린트 좌표 mm (y 아래쪽).
+    KiCad는 VRML 1단위를 0.1인치로 읽고 y가 위쪽이라 2.54로 나누고 y를 뒤집는다."""
+    out = ['#VRML V2.0 utf8']
+    for rgb, boxes in parts:
+        pts, idx = [], []
+        for x0, y0, z0, x1, y1, z1 in boxes:
+            b = len(pts)
+            pts += [(x / 2.54, -y / 2.54, z / 2.54) for z in (z0, z1) for y in (y0, y1) for x in (x0, x1)]
+            # y를 뒤집으면 좌우가 바뀌므로 바깥을 향하는 면 순서도 뒤집힌 쪽으로 적는다 (안쪽을 향하면 고품질 렌더에서 까맣게 나온다)
+            for f in ((1, 3, 2, 0), (6, 7, 5, 4), (4, 5, 1, 0), (3, 7, 6, 2), (2, 6, 4, 0), (5, 7, 3, 1)):
+                idx.append(' '.join(str(b + i) for i in f) + ' -1')
+        out.append('Shape { appearance Appearance { material Material { diffuseColor %.2f %.2f %.2f specularColor 0.3 0.3 0.3 shininess 0.3 } }\n'
+                   ' geometry IndexedFaceSet { solid FALSE coord Coordinate { point [ %s ] }\n coordIndex [ %s ] } }'
+                   % (*rgb, ', '.join('%.4f %.4f %.4f' % p for p in pts), ' '.join(idx)))
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        f.write('\n'.join(out) + '\n')
+
+
 def write_footprints():
     d = os.path.join(HERE, PROJ + '.pretty')
     os.makedirs(d, exist_ok=True)
+    os.makedirs(os.path.join(HERE, '3d'), exist_ok=True)
+    # 3D 모델은 cad/build_housing.py 의 참조 부품과 같은 치수 (HS_*, TO_*). 모양만 맞춘 상자 모델이다
+    to_z0 = 21.6 - (20.8 - 5.33)   # 저항 몸체 아래 끝: 장착 구멍(PCB 위 21.6mm)이 몸체 위 끝에서 5.33mm
+    write_wrl(os.path.join(HERE, '3d', 'TEH100_TO-247.wrl'), [
+        ((0.16, 0.16, 0.17), [(5.08 - 7.95, -2.4, to_z0, 5.08 + 7.95, 2.6, to_z0 + 20.8)]),          # 몸체
+        ((0.82, 0.82, 0.78), [(x - 0.6, -0.3, -3.0, x + 0.6, 0.3, to_z0) for x in (0, 10.16)])])   # 리드
+    fins = [(-12.7, y0 + i * (12.45 - 1.2) / 4, 0, 12.7, y0 + i * (12.45 - 1.2) / 4 + 1.2, 38.1)
+            for y0 in (-20.95, 20.95 - 12.45) for i in range(5)]
+    write_wrl(os.path.join(HERE, '3d', 'Wakefield_657-15ABPE.wrl'), [
+        ((0.30, 0.31, 0.34), [(-0.8, -20.95, 0, 0.8, 20.95, 38.1)] + fins),                       # 세로판 + 양 끝 핀 묶음
+        ((0.82, 0.82, 0.78), [(-1.2, y - 1.2, -4.0, 1.2, y + 1.2, 0) for y in (-12.7, 12.7)])])    # 솔더 핀
+    model = lambda name: ['model', Q('${KIPRJMOD}/3d/%s.wrl' % name),
+                          ['offset', ['xyz', 0, 0, 0]], ['scale', ['xyz', 1, 1, 1]], ['rotate', ['xyz', 0, 0, 0]]]
     # Ohmite TEH100 (rev 7/25-1): 리드 간격 9.90~10.42mm → 10.16mm, 리드 1.37~1.67 x 0.55~1.07mm → 대각 최대 1.98mm.
     # 몸체 15.49~16.01 x 4.69~5.21mm, 리드 중심은 뒷면(방열판 쪽)에서 2.15~2.67mm. 원점은 1번 리드, 방열판 쪽이 -Y.
     # 몸체는 방열판 장착 구멍 높이에 맞춰 PCB 위 약 6mm에 떠 있으므로 코트야드는 리드 영역만 잡는다
@@ -215,6 +247,7 @@ def write_footprints():
            fp_rect(-2.1, -2.2, P + 2.1, 2.2, 'F.CrtYd', 0.05),
            fp_tht('1', 0, 0, 3.2, 3.4, 2.2, 'roundrect') + [['roundrect_rratio', 0.15]],
            fp_tht('2', P, 0, 3.2, 3.4, 2.2, 'oval'),
+           model('TEH100_TO-247'),
            ['embedded_fonts', 'no']]
     # Wakefield 657 시리즈 도면(카탈로그 p.72, 압출 프로파일 6533): 바닥 41.9 x 25.4mm, 가운데 세로판 1.6mm,
     # 세로판 양쪽 가운데 17.0mm가 소자 홈, 솔더 핀 Ø2.4mm 2개가 세로판 중심선 위 25.4mm 간격, 돌출 4.0mm.
@@ -240,6 +273,7 @@ def write_footprints():
            ['fill', 'no'], ['layer', Q('F.CrtYd')], ['uuid', Q(uid())]],
           fp_tht('1', 0, -12.7, 4.2, 4.2, 2.8, 'circle'),
           fp_tht('2', 0, 12.7, 4.2, 4.2, 2.8, 'circle'),
+          model('Wakefield_657-15ABPE'),
           ['embedded_fonts', 'no']]
 
     # TI BQ76907 RGR0020A 랜드 패턴 예(DS SLUSE96A p.63): 패드 0.6 x 0.24mm, 마주 보는 패드 중심 간격 3.3mm,

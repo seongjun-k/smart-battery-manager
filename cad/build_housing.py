@@ -308,6 +308,9 @@ def assemble(paths):
         cam.Apply()
         view.SaveAsBitmap(os.path.join(img, name), 1600, 1100)
 
+    # 첫 캡처에는 간섭 분석 직후의 초록 강조가 남아 찍힌다. 한 번 버리고 시작한다
+    shot("_warmup.png", (1, -1.3, 1), (0, 0, 1), True)
+    os.remove(os.path.join(img, "_warmup.png"))
     shot("iso_closed.png", (1, -1.3, 1), (0, 0, 1), True)       # 앞-오른쪽 위: 덮개, 오른쪽 단자
     shot("iso_open.png", (1, -1.3, 1.4), (0, 0, 1), False)      # 덮개 없이 내부
     shot("back_closed.png", (-1, 1.3, 0.8), (0, 0, 1), True)    # 뒤-왼쪽: 흡기, 배기, USB-C

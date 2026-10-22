@@ -6278,6 +6278,17 @@
 			(uuid "d5fc70cd-33ec-409a-a84d-f7c7296b6381")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/3d/TEH100_TO-247.wrl"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "Button_Switch_SMD:SW_SPST_B3U-1000P"
 		(layer "F.Cu")
@@ -10238,6 +10249,17 @@
 			(uuid "1cd87038-5f54-449b-b9da-8ae884d3f55f")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/3d/Wakefield_657-15ABPE.wrl"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "Capacitor_SMD:C_0603_1608Metric"
 		(layer "F.Cu")
