@@ -1,0 +1,177 @@
+(footprint "BUJEON_BRS-03SC"
+	(version 20241229)
+	(generator "gen_schematic")
+	(layer "F.Cu")
+	(descr "BUJEON BRS-03SC 12mm SMD piezo transducer, sound port on the tab (+X). Pads measured from product photo")
+	(tags "buzzer piezo SMD")
+	(property "Reference" "REF**"
+		(at -7.6 0 0)
+		(layer "F.SilkS")
+		(uuid "85717ecb-70cc-5992-a842-4eabfae6299b")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "BRS-03SC"
+		(at 0 7.2 0)
+		(layer "F.Fab")
+		(uuid "c2a10138-83b1-5b92-8329-c9c8dd6d7981")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "e23cd194-526e-5db4-b329-de374d8086fa")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "9a1f4903-d5eb-53a1-b9c1-1fb7ece8c8bb")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "698c123c-45e8-5389-9754-8f00df08a75c")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_circle
+		(center 0 0)
+		(end 6 0)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+		(uuid "05712f55-864d-5f3a-bfc0-d0f270b44081")
+	)
+	(fp_rect
+		(start 5.3327 -2.75)
+		(end 8.5 2.75)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+		(uuid "17904198-42e2-57f2-a1de-971eac215414")
+	)
+	(fp_arc
+		(start 5.4327 -2.85)
+		(mid -6.11 0)
+		(end 5.4327 2.85)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "43067e3e-4a52-5e2d-b7f3-6dc9ec138a39")
+	)
+	(fp_line
+		(start 5.4327 -2.85)
+		(end 8.4 -2.85)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "76fb18b3-f815-5295-acf8-ff4fce040667")
+	)
+	(fp_line
+		(start 8.4 -2.85)
+		(end 8.4 2.85)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "6c580589-2dcb-5ca3-a7eb-5174e595045f")
+	)
+	(fp_line
+		(start 8.4 2.85)
+		(end 5.4327 2.85)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "a9e07769-aad8-5938-96bd-fd0b7b5fbfef")
+	)
+	(fp_circle
+		(center 0 0)
+		(end 6.25 0)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "d08026ca-2112-5a02-9035-f98291091703")
+	)
+	(fp_rect
+		(start 5.3327 -3)
+		(end 8.75 3)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+		(uuid "ba8536fa-1adc-5079-98d8-d5bbfbe5e847")
+	)
+	(pad "1" smd roundrect
+		(at 0.5 -3.2)
+		(size 4 3)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(roundrect_rratio 0.15)
+		(uuid "e0aae5f3-0b31-5036-bf84-3a82f5c3604b")
+	)
+	(pad "2" smd roundrect
+		(at 0.5 3.2)
+		(size 4 3)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(roundrect_rratio 0.15)
+		(uuid "d8947b49-6e5e-5b40-b263-3ff9f3e01c71")
+	)
+	(model "${KIPRJMOD}/3d/BUJEON_BRS-03SC.wrl"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
+	(embedded_fonts no)
+)

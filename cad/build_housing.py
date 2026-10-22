@@ -76,9 +76,9 @@ USB = (by(163.0), by(153.0))     # 왼쪽 벽 (J2 중심 y 158)
 XT60 = (by(116.4), by(100.4))    # 오른쪽 벽 (J1 핀 y 104.8, 112.0)
 JST = (by(147.0), by(126.0))     # 오른쪽 벽 (J3 핀 y 129~144)
 
-# ---- 부저 BUJEON BRS-03SC (지름 12mm, 두께 4mm): 오른쪽 벽 안쪽에 양면테이프로 붙이고 벽에 소리 구멍. PCB BZ1(XH 2핀)과 케이블 ----
-BZ_Y, BZ_ZC = by(158.0), 20.0     # 케이스 좌표 (부저 중심)
-BZ_D, BZ_T = 12.0, 4.0
+# ---- 부저 BUJEON BRS-03SC (지름 12mm, 두께 4mm): PCB 오른쪽 가장자리에 SMD 실장, 소리 구멍 탭(+X)이 오른쪽 벽을 향한다 ----
+BZ_KICAD = (191.2, 153.6)        # KiCad BZ1 위치 (원통 중심)
+BZ_D, BZ_T, BZ_TAB = 12.0, 4.0, (4.0, 8.5, 5.5)   # 지름, 두께, 탭 (중심에서 x 시작·끝, 폭)
 
 COLORS = {"housing_bottom": (210, 210, 205), "housing_lid": (190, 190, 185), "ref_pcb": (20, 110, 60),
           "ref_fan": (120, 80, 50), "ref_resistor": (220, 170, 40), "ref_heatsink": (60, 60, 65), "ref_oled": (30, 30, 40),
@@ -230,9 +230,9 @@ def bottom():
     p.box(-1, USB[0], zb - 0.5, T + 1, USB[1], zb + 4.0, cut=True)
     p.box(W - T - 1, XT60[0], zb - 0.5, W + 1, XT60[1], zb + 9.0, cut=True)
     p.box(W - T - 1, JST[0], zb - 0.5, W + 1, JST[1], zb + 7.0, cut=True)
-    # 부저 소리 구멍: 지름 2mm 5개 (가운데 + 3mm 십자)
-    for dy, dz in ((0, 0), (3, 0), (-3, 0), (0, 3), (0, -3)):
-        p.cyl("x", (BZ_Y + dy, BZ_ZC + dz), 1.0, W - T - 1, W + 1, cut=True)
+    # 부저 소리 구멍: 탭 끝 소리 구멍 높이(부저 두께 가운데)에 지름 2mm 3개
+    for dy in (-2.0, 0, 2.0):
+        p.cyl("x", (by(BZ_KICAD[1]) + dy, zb + BZ_T / 2), 1.0, W - T - 1, W + 1, cut=True)
     return p.save()
 
 
@@ -314,14 +314,15 @@ def ref_parts():
     p.box(bx(179.6), XT60[0] + 0.5, zb, W - 0.5, XT60[1] - 0.5, zb + 8.2)                    # XT60
     p.box(bx(190.5), JST[0] + 0.5, zb, W - 0.5, JST[1] - 0.5, zb + 6.0)                     # JST-XH 7핀
     p.box(bx(113.0), by(171.6), zb, bx(131.0), by(146.0), zb + 3.2)                          # ESP32-S3 모듈, 안테나가 앞 따냄 위
-    p.cyl("x", (BZ_Y, BZ_ZC), BZ_D / 2, W - T - BZ_T, W - T)                                 # 부저 (오른쪽 벽 안쪽)
+    bxc, byc = bx(BZ_KICAD[0]), by(BZ_KICAD[1])                                              # 부저 (PCB 위)
+    p.cyl("z", (bxc, byc), BZ_D / 2, zb, zb + BZ_T)
+    p.box(bxc + BZ_TAB[0], byc - BZ_TAB[2] / 2, zb, bxc + BZ_TAB[1], byc + BZ_TAB[2] / 2, zb + BZ_T)
     out.append(p.save())
 
     p = Part("ref_tall")   # 키 큰 PCB 부품 (버튼·OLED와의 간섭 확인용)
     p.cyl("z", (bx(171.0), by(121.5)), 5.0, zb, zb + 10.5)                                   # C42 10x10.5
     for x0, x1, y0, y1, h in ((100.1, 111.3, 142.1, 149.1, 12.0),                           # J4 팬 헤더 + 플러그
-                              (133.0, 146.5, 145.6, 152.4, 16.0), (133.0, 146.5, 152.5, 159.3, 16.0),   # J6·J5 (XH + 케이블 플러그)
-                              (183.0, 191.5, 148.1, 154.9, 16.0)):                         # BZ1 (XH 2핀 + 플러그)
+                              (133.0, 146.5, 145.6, 152.4, 16.0), (133.0, 146.5, 152.5, 159.3, 16.0)):  # J6·J5 (XH + 케이블 플러그)
         p.box(bx(x0), by(y1), zb, bx(x1), by(y0), zb + h)
     out.append(p.save())
     return out

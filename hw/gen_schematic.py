@@ -226,6 +226,10 @@ def write_footprints():
     write_wrl(os.path.join(HERE, '3d', 'Wakefield_657-15ABPE.wrl'), [
         ((0.30, 0.31, 0.34), [(-0.8, -20.95, 0, 0.8, 20.95, 38.1)] + fins),                       # 세로판 + 양 끝 핀 묶음
         ((0.82, 0.82, 0.78), [(-1.2, y - 1.2, -4.0, 1.2, y + 1.2, 0) for y in (-12.7, 12.7)])])    # 솔더 핀
+    # BRS-03SC: 지름 12mm, 두께 4mm 원통에 소리 구멍이 있는 탭(폭 5.5, 2.5mm 돌출). 원점은 원통 중심, 탭은 +X
+    disk = [(-math.sqrt(36 - (y + 0.25) ** 2), y, 0, math.sqrt(36 - (y + 0.25) ** 2), y + 0.5, 4.0) for y in [-6 + 0.5 * i for i in range(24)]]
+    write_wrl(os.path.join(HERE, '3d', 'BUJEON_BRS-03SC.wrl'), [
+        ((0.10, 0.10, 0.11), disk + [(4.0, -2.75, 0, 8.5, 2.75, 4.0)])])
     model = lambda name: ['model', Q('${KIPRJMOD}/3d/%s.wrl' % name),
                           ['offset', ['xyz', 0, 0, 0]], ['scale', ['xyz', 1, 1, 1]], ['rotate', ['xyz', 0, 0, 0]]]
     # Ohmite TEH100 (rev 7/25-1): 리드 간격 9.90~10.42mm → 10.16mm, 리드 1.37~1.67 x 0.55~1.07mm → 대각 최대 1.98mm.
@@ -303,7 +307,34 @@ def write_footprints():
            ['model', Q('${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm.step'),
             ['offset', ['xyz', 0, 0, 0]], ['scale', ['xyz', 1, 1, 1]], ['rotate', ['xyz', 0, 0, 0]]],
            ['embedded_fonts', 'no']]
-    for fp in (teh, hs, rgr):
+    # BUJEON BRS-03SC 12mm SMD 피에조: 데이터시트가 없어 판매 사진(지름 12mm 기준)에서 잰 값이다 [확인 필요].
+    # 바닥 패드 2개가 탭 방향과 수직으로 가운데 띠를 사이에 두고 마주 본다. 피에조라 극성은 없다
+    def bz_pad(n, y):
+        return ['pad', Q(n), 'smd', 'roundrect', ['at', 0.5, y], ['size', 4.0, 3.0], ['layers', Q('F.Cu'), Q('F.Mask'), Q('F.Paste')],
+                ['roundrect_rratio', 0.15], ['uuid', Q(uid())]]
+    def fp_circle(r, layer, w):
+        return ['fp_circle', ['center', 0, 0], ['end', r, 0], ['stroke', ['width', w], ['type', 'solid']], ['fill', 'no'],
+                ['layer', Q(layer)], ['uuid', Q(uid())]]
+    ta = math.degrees(math.asin(2.75 / 6.0))
+    ax = 6.0 * math.cos(math.radians(ta))
+    bz = ['footprint', Q('BUJEON_BRS-03SC'), ['version', 20241229], ['generator', Q('gen_schematic')],
+          ['layer', Q('F.Cu')], ['descr', Q('BUJEON BRS-03SC 12mm SMD piezo transducer, sound port on the tab (+X). Pads measured from product photo')],
+          ['tags', Q('buzzer piezo SMD')],
+          fp_prop('Reference', 'REF**', -7.6, 0, 'F.SilkS'),
+          fp_prop('Value', 'BRS-03SC', 0, 7.2, 'F.Fab'),
+          fp_prop('Footprint', '', 0, 0, 'F.Fab', True), fp_prop('Datasheet', '', 0, 0, 'F.Fab', True),
+          fp_prop('Description', '', 0, 0, 'F.Fab', True),
+          ['attr', 'smd'],
+          fp_circle(6.0, 'F.Fab', 0.1), fp_rect(ax, -2.75, 8.5, 2.75, 'F.Fab', 0.1),
+          ['fp_arc', ['start', ax + 0.1, -2.85], ['mid', -6.11, 0], ['end', ax + 0.1, 2.85], ['stroke', ['width', 0.12], ['type', 'solid']],
+           ['layer', Q('F.SilkS')], ['uuid', Q(uid())]],
+          fp_line(ax + 0.1, -2.85, 8.4, -2.85, 'F.SilkS'), fp_line(8.4, -2.85, 8.4, 2.85, 'F.SilkS'),
+          fp_line(8.4, 2.85, ax + 0.1, 2.85, 'F.SilkS'),
+          fp_circle(6.25, 'F.CrtYd', 0.05), fp_rect(ax, -3.0, 8.75, 3.0, 'F.CrtYd', 0.05),
+          bz_pad('1', -3.2), bz_pad('2', 3.2),
+          model('BUJEON_BRS-03SC'),
+          ['embedded_fonts', 'no']]
+    for fp in (teh, hs, rgr, bz):
         with open(os.path.join(d, fp[1] + '.kicad_mod'), 'w', encoding='utf-8', newline='\n') as f:
             f.write(dump(fp) + '\n')
 
@@ -368,7 +399,6 @@ F0603R, F0805R, F0603C, F0805C, F1206C = ("Resistor_SMD:R_0603_1608Metric", "Res
                                           "Capacitor_SMD:C_1206_3216Metric")
 SOD123 = "Diode_SMD:D_SOD-123"
 XH4 = "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical"
-XH2 = "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
 SW_SMD = "Button_Switch_SMD:SW_SPST_B3U-1000P"   # Omron B3U-1000P 3.0x2.5mm
 
 PARTS, WIRES, LABELS, TEXTS, FRAMES = [], [], [], [], []
@@ -767,9 +797,9 @@ def block_mcu():
     pwr("+3V3", T(401.32, 203.2))
     w("J6.1", T(388.62, 205.74), T(388.62, 208.28))
     gnd(T(388.62, 208.28))
-    # 부저: BUJEON BRS-03SC 12mm 피에조. 케이스 오른쪽 벽 소리 구멍 안쪽에 붙이고 XH 2핀 케이블로 잇는다.
+    # 부저: BUJEON BRS-03SC 12mm SMD 피에조를 PCB 오른쪽 가장자리에 실장한다. 소리 구멍 탭이 오른쪽 벽 구멍을 향한다.
     # NPN 로우사이드, 피에조는 용량성이라 다이오드 대신 병렬 저항으로 꺼질 때 전하를 뺀다
-    add("BZ1", "Device:Buzzer", "BRS-03SC", XH2, *T(393.7, 228.6), {"1": "+5V", "2": "BZ_N"})
+    add("BZ1", "Device:Buzzer", "BRS-03SC", "smart_bms:BUJEON_BRS-03SC", *T(393.7, 228.6), {"1": "+5V", "2": "BZ_N"})
     two("R56", R, "1k", F0603R, *T(383.54, 228.6), "+5V", "BZ_N", fld="L")
     add("Q3", "Transistor_BJT:MMBT3904", "MMBT3904", None, *T(388.62, 241.3), {"1": "BZ_B", "3": "BZ_N", "2": "GND"})
     w("BZ1.1", T(391.16, 223.52), T(391.16, 220.98))
