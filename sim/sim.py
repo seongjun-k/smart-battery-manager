@@ -254,8 +254,9 @@ class Device:
         if self.state != "RUN" or self.v0 is None:
             return None
         lo = min(self.cells)
-        if self.mode == "BALANCE":
-            span, done = self.d0 - BAL_DONE_V, self.d0 - (max(self.cells) - lo)
+        if self.mode == "BALANCE":   # 완료 판정과 같은 이동평균. 순간값은 노이즈로 진행률이 들쭉날쭉하다
+            v = self.v_filt or self.cells
+            span, done = self.d0 - BAL_DONE_V, self.d0 - (max(v) - min(v))
         else:
             end = CAP_END_V if self.mode == "CAPACITY" else self.target_v
             span, done = self.v0 - end, self.v0 - lo
@@ -386,8 +387,8 @@ class Device:
             self.outputs_off()
             self.trip = None
             self.cap_acc = 0.0
-            lo = min(self.cells)
-            self.run_t0, self.v0, self.d0 = self.t, lo, max(self.cells) - lo
+            v = self.v_filt or self.cells
+            self.run_t0, self.v0, self.d0 = self.t, min(self.cells), max(v) - min(v)
             self.go("DIAG" if mode == "DIAG" else "RUN")
             self.events.append("START")
             return None

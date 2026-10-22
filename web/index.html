@@ -4,238 +4,452 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>스마트 배터리 관리 디바이스</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Crect x='2' y='7' width='19' height='12' rx='2' fill='none' stroke='%23ffd23f' stroke-width='2'/%3E%3Crect x='21.5' y='10.5' width='2.5' height='5' rx='1' fill='%23ffd23f'/%3E%3C/svg%3E">
 <script src="chart.umd.min.js"></script>
+<script src="oledfont.js"></script>
 <style>
+  /* 장치 AP 모드에서도 열리도록 외부 글꼴·CDN 없이 시스템 글꼴만 쓴다 */
   :root {
-    --bg: #0b0f17; --card: #121826; --card2: #182032; --line: #243049; --text: #e6e9ef; --muted: #8b97ad;
-    --accent: #facc15; --ok: #22c55e; --warn: #f59e0b; --bad: #ef4444; --info: #60a5fa;
+    --bg: #0b0c0e; --panel: #141619; --panel2: #1b1e22; --well: #0f1113; --line: #272b31; --line2: #353a42;
+    --text: #ebe8e2; --muted: #8d929b; --dim: #5d636c;
+    --v: #5ac8fa; --i: #ffd23f; --p: #f4f1ea; --t: #ff7a45;
+    --ok: #34d399; --warn: #ffa726; --bad: #ff4d4f; --hi: #b48cff; --lo: #5ac8fa;
+    --num: Bahnschrift, "DIN Alternate", "Segoe UI", system-ui, "Malgun Gothic", sans-serif;
+    --mono: "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace;
+    --ko: "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, "Malgun Gothic", sans-serif; }
-  .num { font-variant-numeric: tabular-nums; }
+  html { background: var(--bg); }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--ko); }
+  .num { font-family: var(--num); font-variant-numeric: tabular-nums; }
+  button, input, select { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
 
-  header {
-    position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
-    padding: 10px 18px; background: #070a10; border-bottom: 1px solid var(--line);
+  /* ---------- 상단 막대 ---------- */
+  .bar {
+    position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 18px;
+    padding: 10px 20px; background: rgba(11, 12, 14, .92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
   }
-  header h1 { margin: 0; font-size: 16px; font-weight: 600; color: var(--muted); }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); display: inline-block; margin-right: 6px; }
-  .dot.on { background: var(--ok); }
-  #conn { font-size: 13px; color: var(--muted); }
-  .code { display: flex; align-items: baseline; gap: 6px; }
-  .code b { font-family: Consolas, monospace; font-size: 20px; letter-spacing: .5px; }
-  .code small { color: var(--muted); font-size: 13px; }
+  .brand { display: flex; align-items: center; gap: 10px; flex: none; }
+  .brand svg { width: 26px; height: 26px; }
+  .brand b { display: block; font: 700 15px/1.1 var(--num); letter-spacing: 2px; }
+  .brand small { display: block; color: var(--muted); font-size: 11px; }
+  .flow { display: flex; gap: 2px; margin: 0; padding: 0; list-style: none; overflow-x: auto; scrollbar-width: none; }
+  .flow li {
+    padding: 4px 10px; border-radius: 4px; color: var(--dim); text-align: center; white-space: nowrap;
+    border: 1px solid transparent; transition: color .2s, background .2s;
+  }
+  .flow li b { display: block; font: 600 12px/1.2 var(--num); letter-spacing: 1px; }
+  .flow li small { display: block; font-size: 10px; }
+  .flow li.on { color: var(--text); background: var(--panel2); border-color: var(--line2); }
+  .flow li.on b { color: var(--i); }
+  .flow li.stop.on { background: #3a1214; border-color: var(--bad); }
+  .flow li.stop.on b { color: var(--bad); }
+  .flow .sep { color: var(--line2); padding: 9px 0; font-size: 11px; }
   .spacer { flex: 1; }
-  #time { font-family: Consolas, monospace; color: var(--muted); }
-  #stop {
-    padding: 10px 30px; border: 0; border-radius: 8px; background: var(--bad); color: #fff;
-    font-size: 17px; font-weight: 800; letter-spacing: 1px; cursor: pointer;
+  .conn { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 3px rgba(255, 77, 79, .15); }
+  .conn.on i { background: var(--ok); box-shadow: 0 0 0 3px rgba(52, 211, 153, .15); }
+  .sim { padding: 2px 7px; border: 1px solid var(--line2); border-radius: 4px; font: 600 11px var(--num); letter-spacing: 1px; color: var(--muted); }
+  .clock { text-align: right; }
+  .clock small { display: block; color: var(--dim); font: 10px var(--num); letter-spacing: 1px; }
+  .clock b { font: 500 16px var(--num); }
+  .estop {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 108px; padding: 7px 18px;
+    border: 0; border-radius: 6px; background: var(--bad); color: #fff; cursor: pointer;
+    box-shadow: 0 0 0 1px #ff8587 inset, 0 4px 14px rgba(255, 77, 79, .25);
   }
-  #stop:hover { filter: brightness(1.1); }
+  .estop b { font: 800 17px/1 var(--num); letter-spacing: 3px; }
+  .estop small { font-size: 11px; opacity: .85; }
+  .estop:hover { filter: brightness(1.08); }
+  .estop:active { transform: translateY(1px); }
+
   #alarm {
-    position: sticky; top: 57px; z-index: 9; padding: 10px 18px; background: #3b0d0d; color: #fecaca;
-    border-bottom: 1px solid var(--bad); font-weight: 700;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 9px 20px; background: #2a0d0f; color: #ffd0d1;
+    border-bottom: 1px solid #7a1c1f; font-weight: 600;
+  }
+  #alarm b { font: 700 12px var(--num); letter-spacing: 2px; color: var(--bad); }
+  #alarm span { white-space: nowrap; display: inline-flex; gap: 6px; align-items: baseline; padding: 2px 9px; background: rgba(255, 77, 79, .14); border-radius: 4px; }
+  #alarm code { font: 600 11px var(--mono); color: #ff9a9c; }
+
+  /* ---------- 격자 ---------- */
+  main { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; max-width: 1400px; margin: 0 auto; padding: 14px 20px 32px; }
+  body.offline main { opacity: .55; }
+  .panel { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 16px; min-width: 0; }
+  .panel > h2 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; font: 600 11px var(--num); letter-spacing: 2px; color: var(--muted); }
+  .panel > h2 span { font: 12px var(--ko); letter-spacing: 0; color: var(--dim); }
+  .c3 { grid-column: span 3; } .c4 { grid-column: span 4; } .c5 { grid-column: span 5; } .c8 { grid-column: span 8; } .c12 { grid-column: span 12; }
+  @media (max-width: 1180px) {
+    .c3, .c4, .c5 { grid-column: span 6; } .c8 { grid-column: span 12; }
+    .device { grid-row: span 1; }
+  }
+  @media (max-width: 760px) {
+    .bar { flex-wrap: wrap; gap: 10px 14px; padding: 10px 16px; }
+    .flow { order: 5; width: 100%; }
+    .brand small, .clock, .conn span, .sim { display: none; }
+    .estop { min-width: 0; padding: 6px 14px; }
+    #alarm { padding: 9px 16px; }
+    .row3 { gap: 4px; }
+    .vals .cv { font-size: 14px; }
+    .vals .cv small { font-size: 9px; letter-spacing: 0; white-space: nowrap; }
+    .subs .s { font-size: 10px; white-space: nowrap; }
+    .subs .s b { font-size: 11px; }
+    .pack { grid-template-columns: 26px 1fr; gap: 0 4px; }
+    main { padding: 12px 16px 24px; gap: 10px; }
+    .c3, .c4, .c5, .c8 { grid-column: span 12; }
   }
 
-  main {
-    display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px;
-    max-width: 1320px; margin: 0 auto; padding: 14px 18px 28px;
+  /* ---------- 장비 화면 ---------- */
+  .housing {
+    padding: 18px 18px 16px; border-radius: 12px; background: linear-gradient(180deg, #24272c, #1a1c20);
+    border: 1px solid #30343b; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 6px 18px rgba(0, 0, 0, .35);
   }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
-  .card h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .3px; }
-  .s8 { grid-column: span 8; } .s4 { grid-column: span 4; } .s6 { grid-column: span 6; } .s12 { grid-column: span 12; }
-  @media (max-width: 960px) { .s8, .s4, .s6 { grid-column: span 12; } }
-
-  /* 진행 영역 */
-  .hero-title { display: flex; align-items: baseline; gap: 10px; }
-  .hero-title b { font-size: 22px; }
-  .hero-title span { color: var(--muted); }
-  #pct { margin-left: auto; font-size: 34px; font-weight: 800; color: var(--accent); }
-  .track { height: 14px; margin: 10px 0 16px; background: var(--card2); border-radius: 7px; overflow: hidden; }
-  .track i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 7px; }
-  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-  .metric { background: var(--card2); border-radius: 10px; padding: 10px 12px; }
-  .metric small { display: block; color: var(--muted); font-size: 12px; }
-  .metric b { font-size: 24px; font-weight: 700; }
-  .metric em { font-style: normal; color: var(--muted); font-size: 14px; margin-left: 3px; }
-  #heroNote { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
-
-  /* OLED 미러 */
-  .oled-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-  .oled-bezel { padding: 10px; background: #000; border-radius: 8px; border: 2px solid #2a2f3a; }
-  #oled { display: block; width: 384px; max-width: 100%; image-rendering: pixelated; }
-  .oled-btns { display: flex; gap: 8px; }
-  .oled-btns button { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--card2); color: var(--text); cursor: pointer; font-family: Consolas, monospace; }
-
-  /* 셀 */
-  .cells-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
-  #delta { font-size: 22px; font-weight: 800; }
-  #delta.ok { color: var(--ok); } #delta.warn { color: var(--warn); } #delta.bad { color: var(--bad); }
-  #cellsNote { color: var(--muted); font-size: 13px; }
-  .cells { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
-  .cell { background: var(--card2); border-radius: 10px; padding: 9px 11px; border: 1px solid transparent; }
-  .cell.max { border-color: #7c5cff; } .cell.min { border-color: var(--info); }
-  .cell .top { display: flex; align-items: baseline; justify-content: space-between; }
-  .cell .lab { color: var(--muted); font-family: Consolas, monospace; white-space: nowrap; }
-  .cell .mk { margin-left: 3px; font-size: 12px; }
-  .cell.max .mk { color: #a78bfa; } .cell.min .mk { color: var(--info); }
-  .cell .v { font-size: 20px; font-weight: 700; }
-  .cell .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
-  .tag.hi { background: #2e2465; color: #c4b5fd; } .tag.lo { background: #12305a; color: #93c5fd; } .tag.bal { background: #3d3410; color: var(--accent); }
-  .dev { position: relative; height: 6px; margin: 8px 0 5px; background: #0e1420; border-radius: 3px; }
-  .dev i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--info); border-radius: 3px; }
-  .cell .sub { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
-
-  /* 수치 */
-  dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 0; }
-  dl.kv dt { color: var(--muted); font-size: 14px; }
-  dl.kv dd { margin: 0; font-weight: 600; text-align: right; }
-  #soh { font-size: 44px; font-weight: 800; line-height: 1; }
-  #soh small { font-size: 16px; color: var(--muted); font-weight: 500; }
-
-  .chart-box { position: relative; height: 240px; }
-
-  /* 조작 */
-  .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
-  .seg input { position: absolute; opacity: 0; pointer-events: none; }
-  .seg label {
-    display: block; padding: 9px 4px; text-align: center; border-radius: 8px; background: var(--card2);
-    border: 1px solid var(--line); cursor: pointer; font-size: 14px;
+  .screen { padding: 8px; border-radius: 6px; background: #050607; box-shadow: inset 0 2px 6px #000, 0 0 0 1px #000; }
+  #oled { display: block; width: 100%; aspect-ratio: 2 / 1; image-rendering: auto; }
+  .keys { display: flex; justify-content: center; gap: 22px; margin-top: 16px; }
+  .keys button { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0; border: 0; background: none; cursor: pointer; }
+  .keys i {
+    width: 38px; height: 38px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #5a5f68, #2c2f35 70%);
+    box-shadow: 0 3px 0 #0c0d0f, 0 0 0 4px #121417, inset 0 1px 1px rgba(255, 255, 255, .2); transition: transform .06s;
   }
-  .seg label code { display: block; font-size: 11px; color: var(--muted); }
-  .seg input:checked + label { border-color: var(--accent); background: #2a250c; }
-  .seg input:focus-visible + label { outline: 2px solid var(--accent); }
-  .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; color: var(--muted); font-size: 14px; }
-  .field select, .field input {
-    width: 150px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--card2); color: var(--text); font-size: 15px;
+  .keys button.red i { background: radial-gradient(circle at 40% 35%, #ff7577, #b3191c 70%); }
+  .keys button:active i { transform: translateY(2px); box-shadow: 0 1px 0 #0c0d0f, 0 0 0 4px #121417; }
+  .keys button:focus-visible i { outline: 2px solid var(--i); outline-offset: 4px; }
+  .keys button:disabled { cursor: not-allowed; opacity: .4; }
+  .keys span { font: 600 11px var(--num); letter-spacing: 2px; color: #b9bdc4; }
+  .hint { margin: 12px 0 0; color: var(--dim); font-size: 12px; text-align: center; }
+
+  /* ---------- 실시간 값 ---------- */
+  .live-head { display: flex; align-items: center; gap: 16px; }
+  .live-head .t { flex: 1; min-width: 0; }
+  .live-head small { display: block; font: 600 11px var(--num); letter-spacing: 2px; color: var(--muted); }
+  .live-head h1 { margin: 2px 0 0; font-size: 26px; font-weight: 700; line-height: 1.2; }
+  #heroNote { margin: 4px 0 0; color: var(--muted); font-size: 13px; min-height: 19px; }
+  .ring { position: relative; width: 108px; height: 108px; flex: none; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 7; }
+  .ring .bg { stroke: var(--panel2); }
+  .ring .fg { stroke: var(--i); stroke-linecap: round; transition: stroke-dashoffset .4s; }
+  .ring div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .ring b { font: 700 26px/1 var(--num); }
+  .ring b em { font-size: 13px; font-style: normal; color: var(--muted); }
+  .ring small { margin-top: 3px; color: var(--muted); font-size: 11px; }
+  .ring.idle .fg { stroke: var(--line2); }
+
+  .readouts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+  .ro { padding: 10px 12px 11px; background: var(--well); border: 1px solid var(--line); border-radius: 8px; border-top: 2px solid var(--c); }
+  .ro small { display: flex; justify-content: space-between; font: 600 10px var(--num); letter-spacing: 1.5px; color: var(--muted); }
+  .ro small span { font: 11px var(--ko); letter-spacing: 0; color: var(--dim); }
+  .ro .val { display: flex; align-items: baseline; gap: 3px; margin-top: 2px; }
+  .ro b { font: 600 34px/1.1 var(--num); color: var(--c); }
+  .ro em { font: 15px var(--num); font-style: normal; color: var(--muted); }
+  .ro .meter { height: 3px; margin-top: 7px; background: var(--panel2); border-radius: 2px; overflow: hidden; }
+  .ro .meter i { display: block; height: 100%; width: 0; background: var(--c); transition: width .3s; }
+  .ro .foot { margin-top: 4px; color: var(--dim); font: 11px var(--num); }
+  .ro.p { --c: var(--p); } .ro.i { --c: var(--i); } .ro.v { --c: var(--v); }
+
+  .limits { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .limits > small { font: 600 10px var(--num); letter-spacing: 1.5px; color: var(--dim); }
+  .limits ul { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; flex-wrap: wrap; }
+  .limits li { padding: 3px 8px; border: 1px solid var(--line); border-radius: 4px; color: var(--dim); font-size: 11px; white-space: nowrap; }
+  .limits li b { font: 600 11px var(--num); margin-right: 4px; }
+  .limits li.on { color: #1d1600; background: var(--i); border-color: var(--i); }
+  .limits.off li { opacity: .45; }
+
+  /* ---------- 모드 시작 ---------- */
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .modes input, .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .modes label {
+    display: block; height: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--well);
+    cursor: pointer; transition: border-color .15s, background .15s;
   }
-  .field select:disabled { opacity: .4; }
-  button.go {
-    width: 100%; margin-top: 8px; padding: 11px; border: 0; border-radius: 8px; background: var(--accent); color: #1a1600;
-    font-size: 16px; font-weight: 800; cursor: pointer;
+  .modes label b { display: block; font: 600 12px var(--num); letter-spacing: 1px; color: var(--muted); }
+  .modes label strong { display: block; font-size: 14px; margin-top: 1px; }
+  .modes label small { display: block; margin-top: 3px; color: var(--dim); font-size: 11px; line-height: 1.35; }
+  .modes input:checked + label { border-color: var(--i); background: #221d0a; }
+  .modes input:checked + label b { color: var(--i); }
+  .modes input:focus-visible + label, .seg input:focus-visible + label { outline: 2px solid var(--i); outline-offset: 2px; }
+  .field { display: block; margin-top: 12px; }
+  .views { margin-left: auto; font-style: normal; letter-spacing: 1px; color: var(--dim); }
+  .field > span { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+  .field > span em { font-style: normal; color: var(--dim); }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .seg label { display: block; padding: 6px 0; text-align: center; border: 1px solid var(--line); border-radius: 6px; background: var(--well); cursor: pointer; font: 600 15px var(--num); }
+  .seg label em { font: 11px var(--num); font-style: normal; color: var(--dim); }
+  .seg input:checked + label { border-color: var(--i); color: var(--i); }
+  .seg.off { opacity: .35; pointer-events: none; }
+  .capin { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; background: var(--well); }
+  .capin input { flex: 1; min-width: 0; padding: 6px 10px; border: 0; background: none; font: 600 15px var(--num); outline: none; }
+  .capin:focus-within { border-color: var(--i); }
+  .capin span { padding: 0 10px; color: var(--muted); font: 13px var(--num); }
+  .go {
+    width: 100%; margin-top: 14px; padding: 11px; border: 0; border-radius: 8px; background: var(--i); color: #1d1600;
+    font: 800 15px var(--num); letter-spacing: 2px; cursor: pointer;
   }
-  .row { display: flex; flex-wrap: wrap; gap: 6px; }
-  button.sub {
-    padding: 7px 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--card2); color: var(--text); font-size: 13px; cursor: pointer;
+  .go small { font: 700 12px var(--ko); letter-spacing: 0; margin-left: 6px; }
+  .go:disabled { background: var(--panel2); color: var(--dim); cursor: not-allowed; }
+  #goHint { margin: 7px 0 0; color: var(--dim); font-size: 12px; min-height: 17px; }
+
+  /* ---------- 셀 ---------- */
+  .cells-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .cells-head h2 { margin: 0; font: 600 11px var(--num); letter-spacing: 2px; color: var(--muted); }
+  .cells-head h2 span { font: 12px var(--ko); letter-spacing: 0; color: var(--dim); margin-left: 6px; }
+  .delta { display: flex; align-items: baseline; gap: 6px; padding: 3px 10px; border-radius: 6px; background: var(--well); border: 1px solid var(--line); }
+  .delta small { font: 600 10px var(--num); letter-spacing: 1.5px; color: var(--dim); }
+  .delta b { font: 700 20px var(--num); }
+  .delta.ok b { color: var(--ok); } .delta.warn b { color: var(--warn); } .delta.bad b { color: var(--bad); }
+  .legend { display: flex; gap: 12px; margin-left: auto; color: var(--dim); font-size: 11px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 14px; height: 0; margin-right: 5px; vertical-align: middle; border-top: 1px dashed; }
+  .legend .lt { color: var(--i); } .legend .lc { color: var(--bad); }
+  .legend span { color: var(--muted); }
+
+  .pack { display: grid; grid-template-columns: 40px 1fr; gap: 0 8px; }
+  .axis { position: relative; height: 190px; margin: 8px 0; grid-row: 2; font: 10px var(--num); color: var(--dim); }
+  .axis span { position: absolute; right: 0; transform: translateY(50%); }
+  .row3 { display: grid; grid-template-columns: repeat(var(--n, 6), minmax(0, 1fr)); gap: 10px; grid-column: 2; }
+  .vals .cv { text-align: center; font: 600 20px var(--num); }
+  .vals .cv small { display: block; font: 600 11px var(--num); letter-spacing: 1px; color: var(--dim); }
+  .vals .cv.max small { color: var(--hi); } .vals .cv.min small { color: var(--lo); }
+  .tubes { position: relative; height: 190px; margin: 8px 0; }
+  .tube {
+    position: relative; height: 100%; border-radius: 7px; background: var(--well); border: 1px solid var(--line); overflow: hidden;
+    background-image: repeating-linear-gradient(0deg, transparent 0 18px, rgba(255, 255, 255, .025) 18px 19px);
   }
-  .toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-  .note { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
-  ol.log { list-style: none; margin: 0; padding: 0; max-height: 250px; overflow: auto; font-size: 13px; }
-  ol.log li { padding: 5px 0; border-bottom: 1px solid var(--line); }
-  ol.log time { color: var(--muted); font-family: Consolas, monospace; margin-right: 8px; }
-  ol.log .err { color: #fca5a5; }
+  .tube .fill {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 0;
+    background: linear-gradient(180deg, rgba(90, 200, 250, .95), rgba(90, 200, 250, .35)); transition: height .4s;
+  }
+  .tube.max { border-color: var(--hi); } .tube.max .fill { background: linear-gradient(180deg, rgba(180, 140, 255, .95), rgba(180, 140, 255, .35)); }
+  .tube.min { border-color: var(--lo); }
+  .tube.bal .fill { background-image: repeating-linear-gradient(135deg, rgba(255, 210, 63, .9) 0 8px, rgba(255, 210, 63, .55) 8px 16px); background-size: 22.6px 22.6px; animation: crawl .9s linear infinite; }
+  @keyframes crawl { to { background-position: 0 22.6px; } }
+  .tube .badge { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); padding: 1px 6px; border-radius: 3px; background: var(--i); color: #1d1600; font: 700 10px var(--num); letter-spacing: 1px; }
+  .gl { position: absolute; left: -4px; right: -4px; height: 0; border-top: 1px dashed; pointer-events: none; }
+  .gl.cut { color: var(--bad); border-color: rgba(255, 77, 79, .7); }
+  .gl.tgt { color: var(--i); border-color: rgba(255, 210, 63, .8); }
+  .subs .s { text-align: center; font: 12px var(--num); color: var(--muted); }
+  .subs .s b { display: block; font-size: 13px; font-weight: 600; }
+  .subs .s b.warn { color: var(--warn); } .subs .s b.bad { color: var(--bad); } .subs .s b.ok { color: var(--ok); }
+  .subs .s span.bad { color: var(--bad); }
+  #cellsEmpty { padding: 60px 0; text-align: center; color: var(--dim); }
+
+  /* ---------- 건강도 ---------- */
+  .gauge { position: relative; width: 210px; max-width: 100%; margin: 0 auto; }
+  .gauge svg { display: block; width: 100%; }
+  .gauge path { fill: none; stroke-width: 14; stroke-linecap: round; }
+  .gauge .bg { stroke: var(--panel2); }
+  .gauge .fg { transition: stroke-dashoffset .5s; }
+  .gauge div { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; }
+  .gauge b { display: block; font: 700 44px/1 var(--num); }
+  .gauge small { color: var(--muted); font-size: 12px; }
+  dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 0; margin: 14px 0 0; }
+  dl.kv dt, dl.kv dd { padding: 7px 0; border-top: 1px solid var(--line); }
+  dl.kv dt { color: var(--muted); font-size: 13px; }
+  dl.kv dd { margin: 0; text-align: right; font: 600 15px var(--num); }
+  dl.kv dd small { color: var(--dim); font-weight: 400; font-size: 12px; margin-left: 4px; }
+  .note { margin: 10px 0 0; color: var(--dim); font-size: 12px; }
+
+  /* ---------- 그래프 ---------- */
+  .chart-box { position: relative; height: 230px; }
+  .chart-box.trend { height: 190px; margin-top: 14px; }
+  .device { display: flex; flex-direction: column; }
+  .device .hint { margin-top: auto; padding-top: 12px; }
+  .vlist { display: grid; gap: 4px; margin: 14px 0 0; padding: 0; list-style: none; counter-reset: v; }
+  .vlist li { display: flex; gap: 10px; align-items: baseline; padding: 6px 10px; border-radius: 6px; color: var(--dim); font-size: 12px; counter-increment: v; }
+  .vlist li::before { content: counter(v); font: 600 11px var(--num); width: 14px; color: var(--dim); }
+  .vlist li b { font: 600 11px var(--mono); color: var(--muted); min-width: 92px; }
+  .vlist li.on { background: var(--well); color: var(--text); box-shadow: inset 2px 0 0 var(--i); }
+  .vlist li.on b, .vlist li.on::before { color: var(--i); }
+  .settings { display: flex; align-items: flex-start; gap: 28px; flex-wrap: wrap; }
+  .settings > h2 { margin: 3px 0 0; }
+  .settings .switch { flex: none; }
+  .settings .faults { flex: 1; min-width: 260px; margin: 0; padding: 0 0 0 28px; border: 0; border-left: 1px solid var(--line); }
+  @media (max-width: 760px) { .settings .faults { padding: 14px 0 0; border-left: 0; border-top: 1px solid var(--line); } }
+  .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 13px; pointer-events: none; }
+
+  /* ---------- 냉각 ---------- */
+  .thermo { position: relative; height: 12px; margin: 30px 0 34px; border-radius: 6px; background: linear-gradient(90deg, #1f3a4d 0%, #2d4a2f 25%, #4d4420 72%, #5a2a1c 90%, #5c1517 100%); }
+  .thermo .needle { position: absolute; top: -6px; width: 3px; height: 24px; margin-left: -1.5px; border-radius: 2px; background: var(--text); box-shadow: 0 0 6px rgba(255, 255, 255, .5); transition: left .4s; }
+  .thermo .tk { position: absolute; top: 16px; transform: translateX(-50%); font: 10px var(--num); color: var(--dim); white-space: nowrap; text-align: center; line-height: 1.25; }
+  .thermo .tk::before { content: ""; position: absolute; left: 50%; top: -18px; height: 14px; border-left: 1px solid var(--line2); }
+  .thermo .tk.w { color: var(--warn); } .thermo .tk.b { color: var(--bad); }
+  .tval { display: flex; align-items: baseline; gap: 4px; }
+  .tval b { font: 600 34px/1 var(--num); color: var(--t); }
+  .tval em { font: 15px var(--num); font-style: normal; color: var(--muted); }
+  .fanrow { display: flex; align-items: center; gap: 10px; }
+  .fanrow svg { width: 22px; height: 22px; color: var(--muted); }
+  .fanrow svg.spin { color: var(--v); animation: spin var(--spd, 1s) linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .fanrow svg.spin, .tube.bal .fill { animation: none; } }
+
+  /* ---------- 이벤트·설정 ---------- */
+  ol.log { list-style: none; margin: 0; padding: 0; max-height: 216px; overflow: auto; font-size: 13px; }
+  ol.log li { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  ol.log li::before { content: ""; flex: none; width: 3px; border-radius: 2px; background: var(--line2); }
+  ol.log li.err::before { background: var(--bad); } ol.log li.err { color: #ffb3b4; }
+  ol.log li.ev::before { background: var(--i); }
+  ol.log time { flex: none; color: var(--dim); font: 12px var(--mono); padding-top: 1px; }
+  ol.log code { font: 600 12px var(--mono); color: var(--muted); margin-right: 6px; }
+  #logEmpty { color: var(--dim); font-size: 13px; padding: 6px 0; }
+  .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+  .switch input { position: absolute; opacity: 0; }
+  .switch i { position: relative; width: 38px; height: 22px; flex: none; border-radius: 11px; background: var(--panel2); border: 1px solid var(--line2); transition: background .15s; }
+  .switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+  .switch input:checked + i { background: #3a3110; border-color: var(--i); }
+  .switch input:checked + i::after { transform: translateX(16px); background: var(--i); }
+  .switch input:focus-visible + i { outline: 2px solid var(--i); outline-offset: 2px; }
+  .faults { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .faults h3 { margin: 0 0 8px; font: 600 11px var(--num); letter-spacing: 2px; color: var(--muted); }
+  .faults h3 span { font: 12px var(--ko); letter-spacing: 0; color: var(--dim); margin-left: 6px; }
+  .faults div { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+  .faults button { padding: 7px 8px; border: 1px solid var(--line2); border-radius: 6px; background: var(--well); color: var(--text); font-size: 12px; cursor: pointer; }
+  .faults button:hover { border-color: var(--warn); }
+  .faults button.clr { color: var(--muted); }
 </style>
 </head>
-<body>
-<header>
-  <h1>스마트 배터리 관리 디바이스</h1>
-  <span id="conn"><span class="dot"></span>연결 끊김</span>
-  <span class="code"><b id="stateCode">-</b><small id="stateKo"></small></span>
-  <span class="code"><b id="modeCode">-</b><small id="modeKo"></small></span>
+<body class="offline">
+<header class="bar">
+  <div class="brand">
+    <svg viewBox="0 0 26 26" aria-hidden="true"><rect x="2" y="7" width="19" height="12" rx="2" fill="none" stroke="#ffd23f" stroke-width="2"/><rect x="21.5" y="10.5" width="2.5" height="5" rx="1" fill="#ffd23f"/><path d="M12.5 9 9 13.6h3.2L10.8 17l4-5h-3.3z" fill="#ffd23f"/></svg>
+    <div><b>SMART BMS</b><small>스마트 배터리 관리 디바이스</small></div>
+  </div>
+  <ol class="flow" id="flow" aria-label="장치 상태"></ol>
   <span class="spacer"></span>
-  <span id="time" class="num">0:00:00</span>
-  <button id="stop" type="button">STOP 정지</button>
+  <span class="sim" id="simTag" hidden title="가상 하드웨어(Python 시뮬레이터)에 연결됨">SIM</span>
+  <span class="conn" id="conn"><i></i><span>연결 끊김</span></span>
+  <div class="clock"><small>UPTIME</small><b id="time" class="num">0:00:00</b></div>
+  <button class="estop" id="stop" type="button"><b>STOP</b><small>정지</small></button>
 </header>
 <div id="alarm" role="alert" hidden></div>
 
 <main>
-  <section class="card s8">
-    <div class="hero-title"><b id="heroTitle">-</b><span id="heroSub"></span><span id="pct" class="num"></span></div>
-    <div class="track"><i id="bar"></i></div>
-    <div class="metrics">
-      <div class="metric"><small>전력</small><b class="num" id="mP">-</b><em>W</em></div>
-      <div class="metric"><small>전류</small><b class="num" id="mI">-</b><em>A</em></div>
-      <div class="metric"><small>팩 전압</small><b class="num" id="mV">-</b><em>V</em></div>
-      <div class="metric"><small>남은 시간</small><b class="num" id="mEta">-</b></div>
-    </div>
-    <p id="heroNote"></p>
-  </section>
-
-  <section class="card s4">
-    <h2>장비 OLED 화면</h2>
-    <div class="oled-wrap">
-      <div class="oled-bezel"><canvas id="oled" width="128" height="64"></canvas></div>
-      <div class="oled-btns"><button type="button" id="oledNext">NEXT 화면 전환</button></div>
-    </div>
-  </section>
-
-  <section class="card s12">
-    <div class="cells-head">
-      <h2 style="margin:0">셀 전압</h2>
-      <span id="delta" class="num">-</span>
-      <span id="cellsNote"></span>
-    </div>
-    <div class="cells" id="cells"></div>
-  </section>
-
-  <section class="card s4">
-    <h2>온도와 냉각</h2>
-    <dl class="kv num">
-      <dt>방열판</dt><dd id="tSink">-</dd>
-      <dt>팬</dt><dd id="fan">-</dd>
-      <dt>PWM 듀티</dt><dd id="duty">-</dd>
-    </dl>
-    <p class="note">보호 기준은 방열판 95°C, 셀 3.5V이며 고정값입니다. 배터리 온도 센서는 없고, 내부저항이 높은 배터리는 방전을 거부합니다.</p>
-  </section>
-
-  <section class="card s4">
-    <h2>건강도 진단</h2>
-    <div id="soh" class="num">-</div>
-    <dl class="kv num" style="margin-top:12px">
-      <dt>셀 내부저항</dt><dd id="irRange">-</dd>
-      <dt>측정 용량</dt><dd id="cap">-</dd>
-    </dl>
-  </section>
-
-  <section class="card s4">
-    <h2>이벤트</h2>
-    <ol class="log" id="log"></ol>
-  </section>
-
-  <section class="card s6">
-    <h2>팩 전압과 전류</h2>
-    <div class="chart-box"><canvas id="chartVI"></canvas></div>
-  </section>
-
-  <section class="card s6">
-    <h2>온도</h2>
-    <div class="chart-box"><canvas id="chartT"></canvas></div>
-  </section>
-
-  <section class="card s6">
-    <h2>모드 시작</h2>
-    <form id="startForm">
-      <div class="seg">
-        <input type="radio" name="mode" id="mS" value="STORAGE" checked><label for="mS">보관<code>STORAGE</code></label>
-        <input type="radio" name="mode" id="mB" value="BALANCE"><label for="mB">밸런싱<code>BALANCE</code></label>
-        <input type="radio" name="mode" id="mC" value="CAPACITY"><label for="mC">용량 테스트<code>CAPACITY</code></label>
-        <input type="radio" name="mode" id="mD" value="DIAG"><label for="mD">진단<code>DIAG</code></label>
+  <section class="panel c4 device" aria-label="장비 화면">
+    <h2>DEVICE <span>장비 OLED와 버튼</span><em class="views num" id="viewDots"></em></h2>
+    <div class="housing">
+      <div class="screen"><canvas id="oled" width="512" height="256" aria-label="OLED 화면 미러"></canvas></div>
+      <div class="keys">
+        <button type="button" id="kNext"><i></i><span>NEXT</span></button>
+        <button type="button" id="kOk"><i></i><span>OK</span></button>
+        <button type="button" id="kStop" class="red"><i></i><span>STOP</span></button>
       </div>
-      <label class="field">목표 전압
-        <select id="targetSel">
-          <option value="3.80">셀당 3.80 V</option>
-          <option value="3.85">셀당 3.85 V</option>
-          <option value="3.90">셀당 3.90 V</option>
-        </select>
+    </div>
+    <ol class="vlist" id="vlist"></ol>
+    <p class="hint">NEXT 화면 전환 · OK 고른 모드 시작 · STOP 정지</p>
+  </section>
+
+  <section class="panel c5" aria-label="실시간 값">
+    <div class="live-head">
+      <div class="t"><small id="heroSub">-</small><h1 id="heroTitle">연결 대기</h1><p id="heroNote"></p></div>
+      <div class="ring idle" id="ring">
+        <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="bg" cx="50" cy="50" r="44"/><circle class="fg" id="ringFg" cx="50" cy="50" r="44"/></svg>
+        <div><b class="num" id="pct">-</b><small id="eta">진행률</small></div>
+      </div>
+    </div>
+    <div class="readouts">
+      <div class="ro p"><small>POWER<span>전력</span></small><div class="val"><b class="num" id="mP">-</b><em>W</em></div><div class="meter"><i id="mPbar"></i></div><div class="foot">한도 25 W</div></div>
+      <div class="ro i"><small>CURRENT<span>전류</span></small><div class="val"><b class="num" id="mI">-</b><em>A</em></div><div class="meter"><i id="mIbar"></i></div><div class="foot">하드웨어 5 A</div></div>
+      <div class="ro v"><small>PACK<span>팩 전압</span></small><div class="val"><b class="num" id="mV">-</b><em>V</em></div><div class="meter"><i id="mVbar"></i></div><div class="foot" id="mS">-</div></div>
+    </div>
+    <div class="limits off" id="limitsBox">
+      <small>LIMIT</small>
+      <ul id="limits">
+        <li data-k="I_P"><b>P</b>전력</li><li data-k="I_C"><b>C</b>C-rate</li><li data-k="I_T"><b>T</b>온도</li>
+        <li data-k="I_V"><b>V</b>전압</li><li data-k="I_HW"><b>HW</b>5A</li><li data-k="REST"><b>REST</b>휴지</li>
+      </ul>
+    </div>
+    <div class="chart-box trend"><canvas id="chartVI"></canvas><div class="empty" id="emptyVI">작업을 시작하면 팩 전압과 전류를 기록합니다</div></div>
+  </section>
+
+  <section class="panel c3" aria-label="모드 시작">
+    <h2>START <span>모드 시작</span></h2>
+    <form id="startForm">
+      <div class="modes" id="modes"></div>
+      <div class="field">
+        <span>목표 셀 전압 <em id="tgtNote">보관 모드</em></span>
+        <div class="seg" id="tgtSeg">
+          <input type="radio" name="tgt" id="t380" value="3.80" checked><label for="t380">3.80<em> V</em></label>
+          <input type="radio" name="tgt" id="t385" value="3.85"><label for="t385">3.85<em> V</em></label>
+          <input type="radio" name="tgt" id="t390" value="3.90"><label for="t390">3.90<em> V</em></label>
+        </div>
+      </div>
+      <label class="field"><span>배터리 정격 용량 <em>C-rate·SOH 기준</em></span>
+        <span class="capin"><input type="number" id="capIn" value="2200" min="100" max="20000" step="100" inputmode="numeric"><span>mAh</span></span>
       </label>
-      <label class="field">배터리 용량 <span><input type="number" id="capIn" value="2200" min="100" max="20000" step="100"> mAh</span></label>
-      <button class="go" type="submit">시작</button>
+      <button class="go" type="submit" id="go">START<small>시작</small></button>
+      <p id="goHint"></p>
     </form>
   </section>
 
-  <section class="card s6">
-    <h2>설정</h2>
-    <label class="toggle"><input type="checkbox" id="keyTone" checked> 부저 버튼음</label>
-    <p class="note">정지음과 경고음은 끌 수 없습니다.</p>
-    <div id="faults" hidden>
-      <h2 style="margin-top:18px">결함 주입 · 시뮬레이션 전용</h2>
-      <div class="row">
-        <button class="sub" type="button" data-fault="imbalance">셀 불균형</button>
-        <button class="sub" type="button" data-fault="fan_stop">팬 정지</button>
-        <button class="sub" type="button" data-fault="overheat">과열</button>
-        <button class="sub" type="button" data-fault="disconnect">연결 불량</button>
-        <button class="sub" type="button" data-fault="high_ir">내부저항 증가</button>
-        <button class="sub" type="button" data-fault="clear">모두 해제</button>
+  <section class="panel c8" aria-label="셀 전압">
+    <div class="cells-head">
+      <h2>CELLS<span>셀 전압</span></h2>
+      <div class="delta" id="delta"><small>MAX-MIN</small><b class="num" id="deltaV">-</b></div>
+      <div class="legend">
+        <span><i class="lt"></i>목표</span><span><i class="lc"></i>3.50 V 차단</span>
+        <span style="color:var(--hi)">MAX 최고</span><span style="color:var(--lo)">MIN 최저</span><span style="color:var(--i)">BAL 밸런싱</span>
+      </div>
+    </div>
+    <div id="cellsEmpty">셀 전압을 읽을 수 없습니다. 밸런스 잭 연결을 확인하세요.</div>
+    <div class="pack" id="pack" hidden>
+      <div class="row3 vals" id="vals"></div>
+      <div class="axis" id="axis"></div>
+      <div class="row3 tubes" id="tubes"></div>
+      <div class="row3 subs" id="subs"></div>
+    </div>
+  </section>
+
+  <section class="panel c4" aria-label="건강도">
+    <h2>HEALTH <span>건강도 진단</span></h2>
+    <div class="gauge">
+      <svg viewBox="0 0 200 112" aria-hidden="true"><path class="bg" d="M 16 100 A 84 84 0 0 1 184 100"/><path class="fg" id="sohArc" d="M 16 100 A 84 84 0 0 1 184 100"/></svg>
+      <div><b class="num" id="soh">-</b><small>SOH / 100점</small></div>
+    </div>
+    <dl class="kv">
+      <dt>셀 내부저항</dt><dd id="irRange">-</dd>
+      <dt>측정 용량</dt><dd id="cap">-</dd>
+    </dl>
+    <p class="note">내부저항이 25 mΩ를 넘는 셀이 있으면 방전을 거부합니다. 배터리 온도 센서가 없어 부푼 배터리를 내부저항으로 거릅니다.</p>
+  </section>
+
+  <section class="panel c5" aria-label="온도 그래프">
+    <h2>THERMAL <span>방열판 온도</span></h2>
+    <div class="chart-box"><canvas id="chartT"></canvas><div class="empty" id="emptyT">작업을 시작하면 기록합니다</div></div>
+  </section>
+
+  <section class="panel c3" aria-label="냉각">
+    <h2>COOLING <span>방열판과 팬</span></h2>
+    <div class="tval"><b class="num" id="tSink">-</b><em>°C</em></div>
+    <div class="thermo" id="thermo">
+      <i class="needle" id="needle"></i>
+      <span class="tk" style="left:25%">40<br>팬</span>
+      <span class="tk w" style="left:75%">80<br>감속</span>
+      <span class="tk b" style="left:93.75%">95<br>차단</span>
+    </div>
+    <dl class="kv">
+      <dt><span class="fanrow"><svg id="fanIcon" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><circle cx="12" cy="12" r="2.2"/><path d="M12 9.8c-.4-3 .5-6.3 3.3-6.3 2.3 0 2.6 2.7.6 4.4-1.1.9-2.4 1.5-3.9 1.9z"/><path d="M14.2 12c3-.4 6.3.5 6.3 3.3 0 2.3-2.7 2.6-4.4.6-.9-1.1-1.5-2.4-1.9-3.9z"/><path d="M12 14.2c.4 3-.5 6.3-3.3 6.3-2.3 0-2.6-2.7-.6-4.4 1.1-.9 2.4-1.5 3.9-1.9z"/><path d="M9.8 12c-3 .4-6.3-.5-6.3-3.3 0-2.3 2.7-2.6 4.4-.6.9 1.1 1.5 2.4 1.9 3.9z"/></g></svg>팬</span></dt><dd id="fan">-</dd>
+      <dt>부하 PWM 듀티</dt><dd id="duty">-</dd>
+    </dl>
+    <p class="note">보호 기준은 고정값입니다. 80 °C부터 전류를 줄이고 95 °C에서 멈춥니다.</p>
+  </section>
+
+  <section class="panel c4" aria-label="이벤트">
+    <h2>LOG <span>이벤트</span></h2>
+    <ol class="log" id="log"></ol>
+    <div id="logEmpty">아직 이벤트가 없습니다.</div>
+  </section>
+
+  <section class="panel c12 settings" aria-label="설정">
+    <h2>SETTINGS <span>설정</span></h2>
+    <label class="switch"><span>부저 버튼음<br><small style="color:var(--dim)">정지음과 경고음은 끌 수 없습니다</small></span><input type="checkbox" id="keyTone" checked><i></i></label>
+    <div class="faults" id="faults" hidden>
+      <h3>FAULT<span>결함 주입, 시뮬레이션 전용</span></h3>
+      <div>
+        <button type="button" data-fault="imbalance">셀 불균형</button>
+        <button type="button" data-fault="fan_stop">팬 정지</button>
+        <button type="button" data-fault="overheat">과열</button>
+        <button type="button" data-fault="disconnect">연결 불량</button>
+        <button type="button" data-fault="high_ir">내부저항 증가</button>
+        <button type="button" data-fault="clear" class="clr">모두 해제</button>
       </div>
     </div>
   </section>
@@ -253,11 +467,20 @@ const KO = {
   limit: { I_P: '전력 한도', I_C: 'C-rate 한도', I_T: '온도 한도', I_V: '전압 한도', I_HW: '하드웨어 한도', REST: '휴지 중' },
   event: { START: '모드 시작', DONE: '완료', STOP: '정지' },
 };
+const MODE_DESC = {
+  STORAGE: '셀당 목표 전압까지 방전',
+  BALANCE: '높은 셀만 BQ76907로 소량 방전',
+  CAPACITY: '3.60 V까지 방전하며 용량 측정',
+  DIAG: '펄스 부하로 셀별 내부저항 측정',
+};
 const BAL_DONE_MV = 10;   // sim.py BAL_DONE_V와 같게
 const MAX_POINTS = 900;
+const STARTABLE = ['SELECT', 'DONE', 'HOLD', 'STOP'];   // sim.py command()의 시작 가능 상태
+const V_LO = 3.3, V_HI = 4.25;   // 셀 막대 눈금 범위
 const $ = id => document.getElementById(id);
 const ko = (g, k) => (k && KO[g][k]) || '';
 const f = (x, d) => (x == null || Number.isNaN(x) ? '-' : x.toFixed(d));
+const clamp = (x, lo, hi) => Math.min(Math.max(x, lo), hi);
 
 let ws, last = null, hist = [], oledView = 0;
 
@@ -266,59 +489,113 @@ function clock(t) {
   return `${h}:${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
-function log(text, isErr) {
+/* ---------- 상태 흐름 ---------- */
+const FLOW = ['IDLE', 'DIAG', 'SELECT', 'RUN', 'DONE', 'HOLD'];
+$('flow').innerHTML = FLOW.map((k, i) => (i ? '<li class="sep" aria-hidden="true">›</li>' : '') +
+  `<li data-s="${k}"><b>${k}</b><small>${KO.state[k]}</small></li>`).join('') +
+  '<li class="sep" aria-hidden="true">|</li><li data-s="STOP" class="stop"><b>STOP</b><small>정지</small></li>';
+
+/* ---------- 모드 카드 ---------- */
+$('modes').innerHTML = Object.keys(MODE_DESC).map((k, i) =>
+  `<div><input type="radio" name="mode" id="m${k}" value="${k}"${i ? '' : ' checked'}>` +
+  `<label for="m${k}"><b>${k}</b><strong>${KO.mode[k]}</strong><small>${MODE_DESC[k]}</small></label></div>`).join('');
+
+/* ---------- 이벤트 ---------- */
+function log(text, kind) {
   const li = document.createElement('li');
   li.innerHTML = `<time>${clock(last ? last.t : 0)}</time>`;
-  li.append(text);
-  if (isErr) li.className = 'err';
+  const span = document.createElement('span');
+  span.innerHTML = text;
+  li.append(span);
+  if (kind) li.className = kind;
   $('log').prepend(li);
-  while ($('log').children.length > 30) $('log').lastChild.remove();
+  $('logEmpty').hidden = true;
+  while ($('log').children.length > 40) $('log').lastChild.remove();
 }
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => { $('conn').innerHTML = '<span class="dot on"></span>연결됨'; };
-  ws.onclose = () => { $('conn').innerHTML = '<span class="dot"></span>연결 끊김'; setTimeout(connect, 1000); };
+  ws.onopen = () => { $('conn').className = 'conn on'; $('conn').lastChild.textContent = '연결됨'; document.body.classList.remove('offline'); };
+  ws.onclose = () => {
+    $('conn').className = 'conn'; $('conn').lastChild.textContent = '연결 끊김'; document.body.classList.add('offline');
+    syncStart();
+    setTimeout(connect, 1000);
+  };
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.type === 'status') render(m);
-    else if (m.type === 'error') log(`명령 거부: ${m.msg}`, true);
+    else if (m.type === 'error') log(`명령 거부: ${esc(m.msg)}`, 'err');
   };
 }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const online = () => ws && ws.readyState === WebSocket.OPEN;
 
 function send(cmd) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'cmd', ...cmd }));
-  else log('장치와 연결되지 않아 명령을 보내지 못했습니다', true);
+  if (online()) ws.send(JSON.stringify({ type: 'cmd', ...cmd }));
+  else log('장치와 연결되지 않아 명령을 보내지 못했습니다', 'err');
 }
 
 /* ---------- 그래프 ---------- */
-Chart.defaults.color = '#8b97ad';
-Chart.defaults.borderColor = '#243049';
-Chart.defaults.font.family = 'system-ui, "Malgun Gothic", sans-serif';
-function chart(canvas, sets, axes) {
+Chart.defaults.color = '#8d929b';
+Chart.defaults.borderColor = '#22262b';
+Chart.defaults.font.family = 'Bahnschrift, "Segoe UI", system-ui, "Malgun Gothic", sans-serif';
+Chart.defaults.font.size = 11;
+// 기준선 (가로 점선 + 이름표)
+const guides = {
+  id: 'guides',
+  afterDatasetsDraw(c, _, opts) {
+    const { ctx, chartArea: a, scales: { y } } = c;
+    (opts.lines || []).forEach(([v, color, label]) => {
+      const py = y.getPixelForValue(v);
+      if (py < a.top || py > a.bottom) return;
+      ctx.save();
+      ctx.strokeStyle = color; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(a.left, py); ctx.lineTo(a.right, py); ctx.stroke();
+      ctx.fillStyle = color; ctx.font = '10px Bahnschrift, "Malgun Gothic", sans-serif'; ctx.textAlign = 'right';
+      ctx.fillText(label, a.right - 4, py - 4);
+      ctx.restore();
+    });
+  },
+};
+function chart(canvas, sets, axes, lines) {
   return new Chart(canvas, {
     type: 'line',
+    plugins: [guides],
     data: { datasets: sets.map(([label, color, yAxisID]) => ({
-      label, borderColor: color, backgroundColor: color, yAxisID, data: [], borderWidth: 2, pointRadius: 0, tension: 0.2,
+      label, borderColor: color, backgroundColor: color, yAxisID, data: [], borderWidth: 1.8, pointRadius: 0, tension: 0.2,
     })) },
     options: {
       animation: false, maintainAspectRatio: false, parsing: false, normalized: true,
       interaction: { mode: 'nearest', axis: 'x', intersect: false },
-      plugins: { legend: { labels: { boxWidth: 12, boxHeight: 2 } } },
-      scales: { x: { type: 'linear', title: { display: true, text: '경과 시간 (분)' } }, ...axes },
+      plugins: {
+        legend: { align: 'end', labels: { boxWidth: 10, boxHeight: 2, padding: 12 } },
+        tooltip: { backgroundColor: '#1b1e22', borderColor: '#353a42', borderWidth: 1, titleColor: '#ebe8e2', bodyColor: '#ebe8e2' },
+        guides: { lines },
+      },
+      scales: {
+        x: { type: 'linear', min: 0, title: { display: true, text: '경과 시간 (분)' }, grid: { color: '#1b1e22' } },
+        ...axes,
+      },
     },
   });
 }
-const chartVI = chart($('chartVI'), [['팩 전압', '#60a5fa', 'y'], ['전류', '#facc15', 'y1']], {
-  y: { position: 'left', title: { display: true, text: 'V' } },
-  y1: { position: 'right', title: { display: true, text: 'A' }, grid: { drawOnChartArea: false }, min: 0 },
-});
-const chartT = chart($('chartT'), [['방열판', '#f97316', 'y']], {
-  y: { title: { display: true, text: '°C' }, suggestedMin: 20, suggestedMax: 75 },
-});
-function clearCharts() { [chartVI, chartT].forEach(c => { c.data.datasets.forEach(d => { d.data = []; }); c.update('none'); }); }
+const chartVI = chart($('chartVI'), [['팩 전압 V', '#5ac8fa', 'y'], ['전류 A', '#ffd23f', 'y1']], {
+  y: { position: 'left', grid: { color: '#1b1e22' } },
+  y1: { position: 'right', grid: { drawOnChartArea: false }, min: 0, suggestedMax: 2 },
+}, []);
+const chartT = chart($('chartT'), [['방열판 °C', '#ff7a45', 'y']], {
+  y: { suggestedMin: 20, suggestedMax: 100, grid: { color: '#1b1e22' } },
+}, [[80, 'rgba(255,167,38,.8)', '80 °C 감속'], [95, 'rgba(255,77,79,.85)', '95 °C 차단']]);
+function clearCharts() {
+  [chartVI, chartT].forEach(c => { c.data.datasets.forEach(d => { d.data = []; }); c.update('none'); });
+  $('emptyVI').hidden = $('emptyT').hidden = false;
+}
 function push(c, x, ys) {
   c.data.datasets.forEach((d, i) => { d.data.push({ x, y: ys[i] }); if (d.data.length > MAX_POINTS) d.data.shift(); });
+  if (c === chartVI) {   // 팩 전압 축은 0.4 V 폭 이상. 밸런싱처럼 거의 안 변할 때 0.01 V 반올림 계단이 파형처럼 보이지 않게
+    const v = c.data.datasets[0].data.map(p => p.y), y = c.options.scales.y;
+    y.suggestedMin = Math.min(...v) - 0.2; y.suggestedMax = Math.max(...v) + 0.2;
+  }
   c.update('none');
 }
 
@@ -378,151 +655,244 @@ function oledFrame(s) {
   lines.push({ t: s.state === 'SELECT' ? 'NEXT:mode OK:start' : 'NEXT:view' });
   return lines;
 }
+
+// u8g2 그리기 함수를 그대로 옮긴 1비트 프레임 버퍼. 글꼴은 oledfont.js (펌웨어와 같은 u8g2 글꼴)
+const FB = new Uint8Array(128 * 64);
+const px = (x, y) => { if (x >= 0 && x < 128 && y >= 0 && y < 64) FB[y * 128 + x] = 1; };
+const drawBox = (x, y, w, h) => { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) px(x + i, y + j); };
+const drawHLine = (x, y, w) => drawBox(x, y, w, 1);
+const drawFrame = (x, y, w, h) => { drawHLine(x, y, w); drawHLine(x, y + h - 1, w); drawBox(x, y, 1, h); drawBox(x + w - 1, y, 1, h); };
+function drawStr(font, x, y, s) {
+  const F = OLED_FONTS[font], base = y + F.asc + 1;   // setFontPosTop
+  for (const ch of s) {
+    const [w, h, gx, gy, dx, ...rows] = F.g[ch.charCodeAt(0) - 32] || F.g[0];
+    const top = base - h - gy;
+    rows.forEach((r, j) => { for (let i = 0; i < w; i++) if ((r >> (w - 1 - i)) & 1) px(x + gx + i, top + j); });
+    x += dx;
+  }
+}
+
+// 펌웨어 oledUpdate()와 같은 좌표
 function drawOled(s) {
-  og.fillStyle = '#000'; og.fillRect(0, 0, 128, 64);
-  og.fillStyle = '#dfe9ff'; og.strokeStyle = '#dfe9ff';
-  og.textBaseline = 'top';
-  const lines = oledFrame(s);
+  FB.fill(0);
+  const cells = s.cells.map(c => +c.toFixed(3));
   let y = 0;
-  for (const L of lines) {
+  for (const L of oledFrame(s)) {
     if (L.cells) {
-      og.font = '9px Consolas, monospace'; og.fillText(L.t, 1, 0);
-      const lo = Math.min(...s.cells), hi = Math.max(...s.cells), rows = s.cells.length, h = Math.floor(52 / rows);
-      s.cells.forEach((c, i) => {
-        const yy = 11 + i * h;
-        og.fillText(`C${i + 1}`, 1, yy);
-        const w = 14 + Math.round(50 * (hi > lo ? (c - lo) / (hi - lo) : 1));
-        og.fillRect(16, yy + 1, w, h - 3);
-        og.fillText(c.toFixed(2), 96, yy);
+      drawStr('f5x8', 1, 0, L.t);
+      const lo = Math.min(...cells), hi = Math.max(...cells), rows = cells.length, h = Math.floor(52 / rows);
+      cells.forEach((c, k) => {
+        const yy = 11 + k * h;
+        drawStr('f5x8', 1, yy, `C${k + 1}`);
+        drawBox(16, yy + 1, 14 + Math.round(50 * (hi > lo ? (c - lo) / (hi - lo) : 1)), h - 3);
+        drawStr('f5x8', 96, yy, c.toFixed(2));
       });
       break;
     }
     if (L.bar != null) {
-      og.strokeRect(1.5, y + 1.5, 125, 8); og.fillRect(3, y + 3, Math.round(122 * L.bar), 5);
+      drawFrame(1, y + 1, 126, 9); drawBox(3, y + 3, Math.round(122 * L.bar), 5);
       y += 11; continue;
     }
-    og.font = L.title ? '12px Consolas, monospace' : '9px Consolas, monospace';
-    og.fillText(L.t, 1, y);
+    drawStr(L.title ? 'f6x12' : 'f5x8', 1, y, L.t);
     y += L.title ? 13 : 10;
-    if (L.title) { og.fillRect(0, y - 1, 128, 1); y += 2; }
+    if (L.title) { drawHLine(0, y - 1, 128); y += 2; }
   }
-  // 1비트로 만들어 실제 OLED처럼 보이게
-  const img = og.getImageData(0, 0, 128, 64), d = img.data;
-  for (let i = 0; i < d.length; i += 4) { const on = d[i] > 100; d[i] = on ? 223 : 0; d[i + 1] = on ? 233 : 0; d[i + 2] = on ? 255 : 0; d[i + 3] = 255; }
-  og.putImageData(img, 0, 0);
+  paintOled();
+  // 화면 목록: 펌웨어와 같은 순서 (실행 중 3장, 그 밖 2장)
+  const n = s.state === 'RUN' ? 3 : 2;
+  const names = s.state === 'RUN'
+    ? [[{ STORAGE: 'DISCHARGING', BALANCE: 'BALANCING', CAPACITY: 'CAP TEST' }[s.mode], '진행률, 전류, 전력, 경과 시간'], ['CELLS', '셀별 전압 막대'], [`${s.mode} MODE`, '팩 전압, 부하 온도, 팬']]
+    : [[s.state === 'SELECT' ? 'SELECT MODE' : 'STATUS', '상태, 경고, 팩 전압, SOH'], ['CELLS', '셀별 전압 막대']];
+  $('viewDots').textContent = `VIEW ${oledView % n + 1}/${n}`;
+  $('vlist').innerHTML = names.map(([b, t], i) => `<li${i === oledView % n ? ' class="on"' : ''}><b>${b}</b>${t}</li>`).join('');
 }
-$('oledNext').onclick = () => { oledView++; if (last) drawOled(last); };
+// 화면에는 OLED 화소처럼 점으로 키워 그린다
+function paintOled() {
+  const S = oled.width / 128;
+  og.fillStyle = '#030405'; og.fillRect(0, 0, oled.width, oled.height);
+  og.fillStyle = '#0b0e13';
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) if (!FB[y * 128 + x]) og.fillRect(x * S + .5, y * S + .5, S - 1, S - 1);
+  og.save();
+  og.shadowColor = 'rgba(140, 185, 255, .55)'; og.shadowBlur = 7; og.fillStyle = '#dce8ff';
+  og.beginPath();
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 128; x++) if (FB[y * 128 + x]) og.rect(x * S + .3, y * S + .3, S - .6, S - .6);
+  og.fill();
+  og.restore();
+}
+paintOled();
 
 /* ---------- 셀 ---------- */
+const vy = v => clamp((v - V_LO) / (V_HI - V_LO), 0, 1) * 100;
+$('axis').innerHTML = [3.4, 3.6, 3.8, 4.0, 4.2].map(v => `<span style="bottom:${vy(v)}%">${v.toFixed(1)}</span>`).join('');
 function renderCells(s) {
-  const box = $('cells');
-  if (box.children.length !== s.cells.length) {
-    box.innerHTML = s.cells.map((_, i) =>
-      `<div class="cell"><div class="top"><span class="lab">C${i + 1}<span class="tags"></span></span><span class="v num"></span></div>` +
-      '<div class="dev"><i></i></div><div class="sub"><span class="dv num"></span><span class="ir num"></span></div></div>'
-    ).join('');
-  }
-  if (!s.cellCount) {
-    $('delta').textContent = '-'; $('delta').className = 'num bad';
-    $('cellsNote').textContent = '셀 전압을 읽을 수 없습니다. 밸런스 잭 연결을 확인하세요.';
+  const n = s.cells.length;
+  $('cellsEmpty').hidden = !!s.cellCount;
+  $('pack').hidden = !s.cellCount;
+  $('delta').hidden = !s.cellCount;
+  if (!s.cellCount) return;
+  if ($('tubes').querySelectorAll('.tube').length !== n) {
+    $('pack').style.setProperty('--n', n);
+    $('vals').innerHTML = s.cells.map(() => '<div class="cv num"><small></small><span></span></div>').join('');
+    $('tubes').innerHTML = s.cells.map(() => '<div class="tube"><i class="fill"></i><span class="badge" hidden>BAL</span></div>').join('') +
+      '<i class="gl cut"></i><i class="gl tgt" hidden></i>';
+    $('subs').innerHTML = s.cells.map(() => '<div class="s num"><b></b><span></span></div>').join('');
+    $('tubes').querySelector('.cut').style.bottom = `${vy(3.5)}%`;
   }
   const lo = Math.min(...s.cells), hi = Math.max(...s.cells), dmv = (hi - lo) * 1000;
-  const scale = Math.max(dmv, 20);   // 막대는 최저 셀 대비 편차를 확대해서 보여 준다
-  [...box.children].forEach((el, i) => {
-    const v = s.cells[i], up = (v - lo) * 1000;
-    const marked = s.cellCount && dmv > BAL_DONE_MV;   // 균형 상태에선 최고·최저 표시 안 함
-    const isHi = marked && v === hi, isLo = marked && v === lo;
-    el.className = 'cell' + (isHi ? ' max' : isLo ? ' min' : '');
-    el.querySelector('.v').textContent = v.toFixed(3);
-    el.querySelector('.tags').innerHTML =
-      (isHi ? '<span class="mk" title="최고 셀">▲</span>' : isLo ? '<span class="mk" title="최저 셀">▼</span>' : '') +
-      (s.bal && s.bal[i] ? '<span class="tag bal" title="밸런싱 중">BAL</span>' : '');
-    el.querySelector('.dev i').style.width = `${Math.min(100, up / scale * 100)}%`;
-    el.querySelector('.dv').textContent = `+${up.toFixed(0)} mV`;
-    el.querySelector('.ir').textContent = s.ir ? `${s.ir[i].toFixed(1)} mΩ` : '';
+  const marked = dmv > BAL_DONE_MV;   // 균형 상태에선 최고·최저 표시 안 함
+  const vals = $('vals').children, tubes = $('tubes').querySelectorAll('.tube'), subs = $('subs').children;
+  s.cells.forEach((v, i) => {
+    const isHi = marked && v === hi, isLo = marked && v === lo, bal = !!(s.bal && s.bal[i]);
+    vals[i].className = 'cv num' + (isHi ? ' max' : isLo ? ' min' : '');
+    vals[i].firstChild.textContent = `C${i + 1}${isHi ? ' MAX' : isLo ? ' MIN' : ''}`;
+    vals[i].lastChild.textContent = v.toFixed(3);
+    tubes[i].className = 'tube' + (isHi ? ' max' : isLo ? ' min' : '') + (bal ? ' bal' : '');
+    tubes[i].firstChild.style.height = `${vy(v)}%`;
+    tubes[i].lastChild.hidden = !bal;
+    const up = (v - lo) * 1000;
+    subs[i].firstChild.textContent = `+${up.toFixed(0)} mV`;
+    subs[i].firstChild.className = up <= BAL_DONE_MV ? '' : up <= 50 ? 'warn' : 'bad';
+    const ir = s.ir ? s.ir[i] : null;
+    subs[i].lastChild.textContent = ir == null ? '' : `${ir.toFixed(1)} mΩ`;
+    subs[i].lastChild.className = ir > 25 ? 'bad' : '';
   });
-  if (s.cellCount) {
-    $('delta').textContent = `Δ ${dmv.toFixed(0)} mV`;
-    $('delta').className = 'num ' + (dmv <= BAL_DONE_MV ? 'ok' : dmv <= 50 ? 'warn' : 'bad');
-    $('cellsNote').textContent = `${s.cellCount}S 연결 · 막대는 최저 셀보다 높은 정도 · ▲최고 ▼최저 BAL 밸런싱 중`;
-  }
+  const tgt = $('tubes').querySelector('.tgt');
+  const showT = s.state === 'RUN' && s.mode !== 'BALANCE' && s.targetV != null;
+  tgt.hidden = !showT;
+  if (showT) tgt.style.bottom = `${vy(s.targetV)}%`;
+  $('deltaV').textContent = `${dmv.toFixed(0)} mV`;
+  $('delta').className = 'delta ' + (dmv <= BAL_DONE_MV ? 'ok' : dmv <= 50 ? 'warn' : 'bad');
 }
 
-/* ---------- 진행 영역 ---------- */
-function renderHero(s) {
+/* ---------- 실시간 값 ---------- */
+const RING_C = 2 * Math.PI * 44;
+$('ringFg').style.strokeDasharray = RING_C;
+function renderLive(s) {
   const running = s.state === 'RUN';
-  const pc = s.progress;
-  $('heroTitle').textContent = running ? `${ko('mode', s.mode)} 진행` : ko('state', s.state) || s.state;
-  $('heroSub').textContent = running ? s.mode : s.state;
-  $('pct').textContent = running && pc != null ? `${Math.round(pc * 100)}%` : '';
-  $('bar').style.width = `${(pc || 0) * 100}%`;
-  $('mP').textContent = f(s.packV * s.current, 1);
+  const pc = s.state === 'DONE' ? 1 : running ? s.progress : null;
+  $('heroSub').textContent = running ? `RUN · ${s.mode}` : s.state;
+  $('heroTitle').textContent = running ? `${ko('mode', s.mode)} 진행 중` : ko('state', s.state) || s.state;
+  $('ring').className = 'ring' + (pc == null ? ' idle' : '');
+  $('ringFg').style.strokeDashoffset = RING_C * (1 - (pc || 0));
+  $('pct').innerHTML = pc == null ? '-' : `${Math.round(pc * 100)}<em>%</em>`;
+  const left = running && pc != null ? eta(pc, s.elapsed) : null;
+  $('eta').textContent = left == null ? (running ? '남은 시간 계산 중' : '진행률') : `약 ${Math.ceil(left / 60)}분 남음`;
+
+  const P = s.packV * s.current;
+  $('mP').textContent = f(P, 1);
   $('mI').textContent = f(s.current, 2);
   $('mV').textContent = f(s.packV, 2);
-  const left = running && pc != null ? eta(pc, s.elapsed) : null;
-  $('mEta').textContent = left == null ? '-' : `${Math.ceil(left / 60)}분`;
+  $('mPbar').style.width = `${clamp(P / 25, 0, 1) * 100}%`;
+  $('mIbar').style.width = `${clamp(s.current / 5, 0, 1) * 100}%`;
+  $('mVbar').style.width = s.cellCount ? `${vy(s.packV / s.cellCount)}%` : '0';
+  $('mS').textContent = s.cellCount ? `${s.cellCount}S · 셀 평균 ${f(s.packV / s.cellCount, 3)} V` : '배터리 없음';
+
+  const limOn = running && s.mode !== 'BALANCE';
+  $('limitsBox').className = 'limits' + (limOn ? '' : ' off');
+  $('limits').querySelectorAll('li').forEach(li => li.classList.toggle('on', limOn && li.dataset.k === s.limit));
+
   let note;
   if (running) {
-    note = s.mode === 'BALANCE' ? '전압이 높은 셀만 BQ76952 내장 밸런싱으로 방전합니다.'
-      : s.limit ? `지금 걸린 한도: ${ko('limit', s.limit)}${s.mode === 'STORAGE' ? ` · 목표 셀당 ${f(s.targetV, 2)} V` : ` · 종료 셀당 ${f(s.targetV, 2)} V`}` : '';
+    note = s.mode === 'BALANCE' ? '전압이 높은 셀만 BQ76907 내장 밸런싱으로 방전합니다. 메인 부하는 꺼져 있습니다.'
+      : `${s.limit ? `지금 걸린 한도는 ${ko('limit', s.limit)}입니다. ` : ''}${s.mode === 'STORAGE' ? '목표' : '종료'} 셀당 ${f(s.targetV, 2)} V`;
   } else {
     note = {
       IDLE: '배터리를 연결하면 자동으로 진단합니다.', DIAG: '펄스 부하로 셀별 내부저항을 재는 중입니다.',
-      SELECT: '아래에서 모드를 골라 시작하세요.', DONE: '작업을 마쳤습니다.', HOLD: '대기 중입니다. 결과는 오른쪽 아래에 있습니다.',
-      STOP: s.alarms.length ? `보호 동작으로 중단: ${s.alarms.map(a => ko('alarm', a) || a).join(', ')}` : '정지했습니다.',
+      SELECT: '진단을 마쳤습니다. 모드를 골라 시작하세요.', DONE: '작업을 마쳤습니다.', HOLD: '결과를 표시하고 있습니다. 다른 모드를 시작할 수 있습니다.',
+      STOP: s.alarms.length ? `보호 동작으로 멈췄습니다: ${s.alarms.map(a => ko('alarm', a) || a).join(', ')}` : '정지했습니다.',
     }[s.state] || '';
   }
   $('heroNote').textContent = note;
 }
 
-function render(s) {
-  if ((last && s.t < last.t) || s.events.includes('START')) { clearCharts(); hist = []; }   // 새 작업 또는 장치 재시작
+function renderHealth(s) {
+  const L = $('sohArc').getTotalLength();
+  $('sohArc').style.strokeDasharray = L;
+  $('sohArc').style.strokeDashoffset = L * (1 - (s.soh ?? 0) / 100);
+  $('sohArc').style.stroke = s.soh == null ? 'transparent' : s.soh >= 80 ? 'var(--ok)' : s.soh >= 50 ? 'var(--warn)' : 'var(--bad)';
+  $('soh').textContent = s.soh ?? '-';
+  $('irRange').innerHTML = s.ir ? `${Math.min(...s.ir).toFixed(1)} ~ ${Math.max(...s.ir).toFixed(1)}<small>mΩ</small>` : '-';
+  $('cap').innerHTML = s.capMeasuredAh == null ? '<small>용량 테스트 전</small>' : `${Math.round(s.capMeasuredAh * 1000)}<small>mAh</small>`;
+}
 
-  $('stateCode').textContent = s.state; $('stateKo').textContent = ko('state', s.state);
-  $('modeCode').textContent = s.mode || '-'; $('modeKo').textContent = ko('mode', s.mode);
+function renderCooling(s) {
+  $('tSink').textContent = f(s.tempSink, 1);
+  $('needle').style.left = `${clamp((s.tempSink - 20) / 80, 0, 1) * 100}%`;
+  $('fan').innerHTML = s.fanRpm ? `${s.fanRpm}<small>RPM</small>` : '<small>정지</small>';
+  const fan = $('fanIcon');
+  fan.classList.toggle('spin', s.fanRpm > 0);
+  if (s.fanRpm) fan.style.setProperty('--spd', `${clamp(600 / s.fanRpm, 0.15, 2)}s`);
+  $('duty').innerHTML = `${f(s.duty * 100, 1)}<small>%</small>`;
+}
+
+/* ---------- 시작 가능 여부 ---------- */
+const modeInputs = () => [...document.querySelectorAll('input[name=mode]')];
+const curMode = () => modeInputs().find(r => r.checked).value;
+function syncStart() {
+  const s = last, mode = curMode();
+  $('tgtSeg').classList.toggle('off', mode !== 'STORAGE');
+  $('tgtNote').textContent = mode === 'STORAGE' ? '보관 모드' : mode === 'CAPACITY' ? '용량 테스트는 3.60 V 고정' : '이 모드에선 안 씀';
+  let why = '';
+  if (!online() || !s) why = '장치와 연결되지 않았습니다.';
+  else if (!STARTABLE.includes(s.state)) {
+    why = { IDLE: '배터리를 연결하면 진단 후 시작할 수 있습니다.', DIAG: '진단이 끝나면 시작할 수 있습니다.', RUN: '실행 중입니다. STOP 후 다시 시작하세요.' }[s.state] || '';
+  } else if (mode !== 'DIAG' && s.alarms.includes('HIGH_IR')) why = '내부저항이 높아 방전 모드를 시작할 수 없습니다. 진단만 가능합니다.';
+  $('go').disabled = !!why;
+  $('kOk').disabled = !online() || !s || !STARTABLE.includes(s.state);
+  $('goHint').textContent = why;
+}
+
+function startCmd(mode) {
+  const mah = Number($('capIn').value);
+  if (!(mah >= 100 && mah <= 20000)) return log('배터리 용량은 100~20000 mAh로 입력하세요', 'err');
+  send({ cmd: 'start', mode, targetV: Number(document.querySelector('input[name=tgt]:checked').value), capacityAh: mah / 1000 });
+}
+
+/* ---------- 전체 갱신 ---------- */
+function render(s) {
+  const first = !last;
+  if ((last && s.t < last.t) || s.events.includes('START')) { clearCharts(); hist = []; }   // 새 작업 또는 장치 재시작
+  if (first && s.selMode) { const r = $(`m${s.selMode}`); if (r) r.checked = true; }
+
   $('time').textContent = clock(s.t);
+  $('simTag').hidden = !s.sim;
+  $('flow').querySelectorAll('li[data-s]').forEach(li => li.classList.toggle('on', li.dataset.s === s.state));
 
   const alarm = $('alarm');
   alarm.hidden = !s.alarms.length;
-  alarm.textContent = '⚠ 경고: ' + s.alarms.map(a => `${ko('alarm', a)} ${a}`).join(' · ');
+  alarm.innerHTML = '<b>WARNING</b>' + s.alarms.map(a => `<span>${ko('alarm', a) || a}<code>${a}</code></span>`).join('');
 
-  renderHero(s);
+  renderLive(s);
   renderCells(s);
-  $('tSink').textContent = `${f(s.tempSink, 1)} °C`;
-  $('fan').textContent = s.fanRpm ? `${s.fanRpm} RPM` : '정지';
-  $('duty').textContent = `${f(s.duty * 100, 1)} %`;
-  $('soh').innerHTML = s.soh == null ? '-' : `${s.soh}<small> / 100점</small>`;
-  $('irRange').textContent = s.ir ? `${Math.min(...s.ir).toFixed(1)} ~ ${Math.max(...s.ir).toFixed(1)} mΩ` : '-';
-  $('cap').textContent = s.capMeasuredAh == null ? '측정 안 함' : `${Math.round(s.capMeasuredAh * 1000)} mAh`;
+  renderHealth(s);
+  renderCooling(s);
   $('faults').hidden = !s.sim;
 
-  if (last && s.state !== last.state) log(`상태 ${s.state} ${ko('state', s.state)}`);
+  // 같은 이름의 이벤트(STOP, DONE)가 함께 오면 상태 변화는 따로 적지 않는다
+  if (last && s.state !== last.state && !s.events.includes(s.state)) log(`<code>${s.state}</code>${ko('state', s.state)}`);
   const prev = last ? last.alarms : [];
-  s.alarms.filter(a => !prev.includes(a)).forEach(a => log(`경고 ${a} ${ko('alarm', a)}`, true));
-  s.events.filter(e => KO.event[e]).forEach(e => log(`${e} ${ko('event', e)}`));
+  s.alarms.filter(a => !prev.includes(a)).forEach(a => log(`<code>${a}</code>경고: ${ko('alarm', a)}`, 'err'));
+  s.events.filter(e => KO.event[e]).forEach(e => log(`<code>${e}</code>${ko('event', e)}${e === 'START' && s.mode ? ` · ${ko('mode', s.mode)}` : ''}`, 'ev'));
 
   last = s;
   drawOled(s);
+  syncStart();
   if (s.elapsed != null) {   // 그래프는 실행 중인 작업만 그린다
     push(chartVI, s.elapsed / 60, [s.packV, s.current]);
     push(chartT, s.elapsed / 60, [s.tempSink]);
+    $('emptyVI').hidden = $('emptyT').hidden = true;
   }
 }
 
 /* ---------- 조작 ---------- */
-$('stop').onclick = () => send({ cmd: 'stop' });
+$('stop').onclick = $('kStop').onclick = () => send({ cmd: 'stop' });
+$('kNext').onclick = () => { oledView++; if (last) drawOled(last); };
+$('kOk').onclick = () => { if (last) startCmd(last.selMode || curMode()); };   // 장비 OK 버튼처럼 고른 모드를 시작
 $('keyTone').onchange = e => send({ cmd: 'set', key: 'buzzerKeyTone', value: e.target.checked });
 document.querySelectorAll('[data-fault]').forEach(b => { b.onclick = () => send({ cmd: 'fault', name: b.dataset.fault }); });
-const modeInputs = [...document.querySelectorAll('input[name=mode]')];
-const syncTarget = () => { $('targetSel').disabled = modeInputs.find(r => r.checked).value !== 'STORAGE'; };
-modeInputs.forEach(r => { r.onchange = syncTarget; });
-$('startForm').onsubmit = e => {
-  e.preventDefault();
-  const mode = modeInputs.find(r => r.checked).value;
-  const mah = Number($('capIn').value);
-  if (!(mah >= 100 && mah <= 20000)) return log('배터리 용량은 100~20000 mAh로 입력하세요', true);
-  send({ cmd: 'start', mode, targetV: Number($('targetSel').value), capacityAh: mah / 1000 });
-};
+document.querySelectorAll('input[name=mode]').forEach(r => { r.onchange = syncStart; });
+$('startForm').onsubmit = e => { e.preventDefault(); startCmd(curMode()); };
+syncStart();
 
 connect();
 </script>

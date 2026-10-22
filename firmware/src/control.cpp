@@ -184,10 +184,11 @@ static void finish() {
 float progress() {
   if (g.state == State::DONE) return 1.0f;
   if (g.state != State::RUN || !g.runValid) return NAN;
-  float lo = minOf(g.cells, g.nCells), hi = maxOf(g.cells, g.nCells), span, done;
-  if (g.mode == Mode::BALANCE) {
+  float lo = minOf(g.cells, g.nCells), span, done;
+  if (g.mode == Mode::BALANCE) {   // 완료 판정과 같은 이동평균. 순간값은 노이즈로 진행률이 들쭉날쭉하다
+    const float *v = g.vFiltValid ? g.vFilt : g.cells;
     span = g.d0 - BAL_DONE_V;
-    done = g.d0 - (hi - lo);
+    done = g.d0 - (maxOf(v, g.nCells) - minOf(v, g.nCells));
   } else {
     float end = g.mode == Mode::CAPACITY ? CAP_END_V : g.targetV;
     span = g.v0 - end;
@@ -361,7 +362,8 @@ void cmdStart(Mode m, float targetV, float capacityAh) {
   float lo = minOf(g.cells, g.nCells);
   g.runT0 = g.t;
   g.v0 = lo;
-  g.d0 = maxOf(g.cells, g.nCells) - lo;
+  const float *v = g.vFiltValid ? g.vFilt : g.cells;
+  g.d0 = maxOf(v, g.nCells) - minOf(v, g.nCells);
   g.runValid = true;
   go(m == Mode::DIAG ? State::DIAG : State::RUN);
   addEvent(EV_START);

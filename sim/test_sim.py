@@ -62,9 +62,12 @@ before = max(dev.cells) - min(dev.cells)
 start(dev, "BALANCE")
 dev.step()
 assert dev.bal[0] is False and sum(dev.bal) == 3 and dev.duty == 0, dev.bal   # 발열 제한: 동시 3셀
-run_until(dev, lambda: dev.state == "DONE", 16 * 3600)
+ps = []
+run_until(dev, lambda: ps.append(dev.progress()) or dev.state == "DONE", 16 * 3600)
 v = [ocv(s) for s in dev.p.soc]
 assert max(v) - min(v) <= 0.012, v
+back = max(a - b for a, b in zip(ps, ps[1:]) if a is not None and b is not None)
+assert back < 0.05, back   # 진행률은 이동평균 기준이라 노이즈로 크게 뒤로 가지 않음
 assert dev.events.count("WARN") == 1, dev.events   # 50mV 기준을 지날 때 경고가 반복되지 않음
 print(f"3 밸런싱 통과: 편차 {before * 1000:.0f}mV → {(max(v) - min(v)) * 1000:.1f}mV, {dev.t / 3600:.1f}시간")
 
