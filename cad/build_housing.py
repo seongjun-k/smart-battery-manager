@@ -32,7 +32,7 @@ def by(y):
 
 # ---- 케이스 ----
 W, D = PCB_W + 2 * (T + GAP), PCB_D + 2 * (T + GAP)      # 바깥 가로(X), 세로(Y)
-H_SHELL = 50.0             # 하부 케이스 높이 (덮개 아래면). 방열판 위 끝(PCB 위 38.1)과 덮개 나사 보스가 정한다
+H_SHELL = 56.0             # 하부 케이스 높이 (덮개 아래면). 방열판 위 끝(PCB 위 38.1) 위에 공기가 세로판을 넘는 공간 약 10mm를 둔다
 H = H_SHELL + T            # 전체 높이
 BOSS = 7.0                 # 덮개 나사 보스 (모서리 7x7, 덮개 아래면에서 7mm만 내려와 팬 위로 지나간다)
 
@@ -180,8 +180,8 @@ def bottom():
     for dy in (-FAN_HOLE / 2, FAN_HOLE / 2):
         for dz in (-FAN_HOLE / 2, FAN_HOLE / 2):
             p.cyl("x", (fyc + dy, fzc + dz), 1.7, -1, T + 1, cut=True)
-    # 흡기구: 뒷면, 방열판 오른쪽(방전 FET·C42 뒤)부터 XT60 앞까지. 6 x 3.6mm (약 830mm²).
-    # 바람은 왼쪽으로 FET 위를 지나 방열판 핀 사이로 들어가고 팬이 왼쪽 벽으로 뺀다
+    # 흡기구: 뒷면, 방열판 오른쪽(방전 FET·C42 뒤)부터 XT60 앞까지. 6 x 3.6mm (약 960mm²).
+    # 바람은 왼쪽으로 FET 위를 지나 방열판 +X쪽 핀 사이로 들어가 위로 오르고, 세로판을 넘어 -X쪽 핀 사이로 내려가 팬이 왼쪽 벽으로 뺀다
     for i in range(6):
         x = bx(148.2) + i * 5.1
         p.box(x, D - T - 1, PCB_Z + PCB_TH + 1, x + 3.6, D + 1, H_SHELL - 3, cut=True)
@@ -208,15 +208,21 @@ def lid():
     # 덮개 테두리 립: 케이스 안쪽에 끼워 위치를 잡는다 (보스 사이)
     p.box(T + 0.3, T + BOSS + 1, H_SHELL - 2, T + 2.3, D - T - BOSS - 1, H_SHELL)
     p.box(W - T - 2.3, T + BOSS + 1, H_SHELL - 2, W - T - 0.3, D - T - BOSS - 1, H_SHELL)
-    # 바람막이: 팬으로 가는 공기가 모두 방열판 핀을 지나게 한다
-    # 1) 방열판과 팬-방열판 틈 위를 덮는 판 (방열판 위 끝에서 0.5mm)
+    # 바람막이: 팬으로 가는 공기가 모두 방열판 핀을 지나게 한다. 657은 세로판이 폭 전체에 이어져 X 방향으로는 공기가
+    # 못 지나므로, +X쪽 핀 사이로 들어온 공기가 위로 올라 방열판 위 공간에서 세로판을 넘고 -X쪽 핀 사이로 내려가 팬에 닿는다.
+    # 방열판 위 공간은 덮개 아래면까지 약 10mm이고, 그 둘레를 아래 벽들이 막아 핀을 거치지 않은 공기가 못 들어온다
     zb = PCB_Z + PCB_TH
     fy = by(FAN_CUT[3])                                   # 팬 자리 앞 가장자리
-    p.box(bx(FAN_CUT[1]) - 2.0, fy - 1.4, zb + HS_L + 0.5, HS_X0 + HS_TH + 0.5, D - T - 0.3, H_SHELL)
-    # 2) 팬 앞 칸막이: 왼쪽 벽부터 방열판 앞면까지. J4(팬 헤더 + 플러그) 위에서는 그 위까지만 내려온다
+    hs_top, hs_x1 = zb + HS_L + 0.5, HS_X0 + HS_TH       # 방열판 위 끝 + 0.5mm 틈, +X 핀 끝
+    # 1) 위 공간의 오른쪽 벽: +X 핀 끝에서 0.8mm 밖, 방열판 위 끝부터 덮개까지, 팬 앞 칸막이에서 뒷벽까지
+    p.box(hs_x1 + 0.8, fy - 1.4, hs_top, hs_x1 + 2.0, D - T - 0.3, H_SHELL)
+    # 2) 위 공간의 앞 벽: 방열판 앞면 앞, 방열판 위 끝부터 덮개까지 (팬 앞 칸막이와 이어진다)
+    p.box(HS_X0 - 0.5, fy - 1.4, hs_top, hs_x1 + 2.0, fy - 0.2, H_SHELL)
+    # 3) 팬 앞 칸막이: 왼쪽 벽부터 방열판 앞-왼쪽 모서리 앞 0.5mm까지 전체 높이. 방열판과 X로 겹치지 않아 닿지 않는다.
+    #    J4(팬 헤더 + 플러그) 위에서는 팬 케이블이 지나게 플러그 위 4.5mm를 비운다
     j4_x1 = bx(111.3) + 0.5
-    p.box(T + 0.3, fy - 1.4, zb + 12.5, j4_x1, fy - 0.2, H_SHELL)
-    p.box(j4_x1, fy - 1.4, zb + 0.3, HS_X0 + 0.7, fy - 0.2, H_SHELL)
+    p.box(T + 0.3, fy - 1.4, zb + 16.5, j4_x1, fy - 0.2, H_SHELL)
+    p.box(j4_x1, fy - 1.4, zb + 0.3, HS_X0 - 0.5, fy - 0.2, H_SHELL)
     ox, oy = OLED
     cx, cy = ox + OLED_S / 2, oy + OLED_S / 2
     p.box(cx - OLED_WIN[0] / 2, cy - OLED_WIN[1] / 2, H_SHELL - 1, cx + OLED_WIN[0] / 2, cy + OLED_WIN[1] / 2, H + 1, cut=True)
@@ -331,7 +337,8 @@ def assemble(paths):
     os.remove(os.path.join(img, "_warmup.png"))
     shot("iso_closed.png", (1, -1.3, 1), (0, 0, 1), True)       # 앞-오른쪽 위: 덮개, 오른쪽 단자
     shot("iso_open.png", (1, -1.3, 1.4), (0, 0, 1), False)      # 덮개 없이 내부
-    shot("back_closed.png", (-1, 1.3, 0.8), (0, 0, 1), True)    # 뒤-왼쪽: 흡기, 배기, USB-C    shot("top_open.png", (0, 0, 1), (0, 1, 0), False)           # 위에서 본 배치
+    shot("back_closed.png", (-1, 1.3, 0.8), (0, 0, 1), True)    # 뒤-왼쪽: 흡기, 배기, USB-C
+    shot("top_open.png", (0, 0, 1), (0, 1, 0), False)           # 위에서 본 배치
     lid_occ.Visible = True
     asm.Save()
 

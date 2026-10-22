@@ -280,8 +280,8 @@ class Device:
         getattr(self, "on_" + self.state.lower())()
 
     def on_idle(self):
-        if self.cell_count > 0:   # 새 연결: 이전 배터리의 측정 용량은 버린다
-            self.cap_measured = None
+        if self.cell_count > 0:   # 새 연결: 이전 배터리의 측정 용량·IR·SOH는 버린다
+            self.cap_measured = self.ir = self.soh = None
             self.go("DIAG")
 
     def on_diag(self):
@@ -289,6 +289,10 @@ class Device:
         if self.cell_count == 0:
             self.duty = 0.0
             return self.go("IDLE")
+        if TRIP_ALARMS.intersection(self.alarms):   # 저전압·과열·팬 정지 상태에서는 펄스 부하를 걸지 않는다. IR 없이 모드 선택으로
+            self.duty = 0.0
+            self.ir = self.soh = None
+            return self.go("SELECT")
         el = self.t - self.state_t
         if el <= DT * 1.5:
             self.v_off, self.v_on, self.i_on = [], [], []
@@ -378,6 +382,8 @@ class Device:
                 return f"지원하지 않는 mode: {mode}"
             if self.state not in ("SELECT", "DONE", "HOLD", "STOP"):
                 return f"{self.state} 상태에서는 시작할 수 없음"
+            if self.cell_count == 0:
+                return "배터리가 연결되지 않음"
             if mode != "DIAG" and "HIGH_IR" in self.alarms:
                 return f"내부저항이 {max(self.ir)}mΩ으로 높아 방전할 수 없음. 부푼 배터리인지 확인"
             target = msg.get("targetV", 3.80)

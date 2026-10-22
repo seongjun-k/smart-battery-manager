@@ -196,8 +196,10 @@ float progress() {
 }
 
 static void onIdle() {
-  if (g.cellCount > 0) {   // 새 연결: 이전 배터리의 측정 용량은 버린다
+  if (g.cellCount > 0) {   // 새 연결: 이전 배터리의 측정 용량·IR·SOH는 버린다
     g.capValid = false;
+    g.irN = 0;
+    g.soh = -1;
     go(State::DIAG);
   }
 }
@@ -207,6 +209,12 @@ static void onDiag() {
   if (g.cellCount == 0) {
     g.duty = 0;
     return go(State::IDLE);
+  }
+  if (TRIP_ALARMS & g.alarms) {   // 저전압·과열·팬 정지 상태에서는 펄스 부하를 걸지 않는다. IR 없이 모드 선택으로
+    g.duty = 0;
+    g.irN = 0;
+    g.soh = -1;
+    return go(State::SELECT);
   }
   double el = g.t - g.stateT;
   if (el <= DT * 1.5) {
@@ -345,6 +353,7 @@ void onStop() {
 
 const char *startRejectReason(Mode m) {
   static char err[128];
+  if (g.cellCount == 0) return "배터리가 연결되지 않음";
   if (m == Mode::DIAG || !(g.alarms & AL_HIGH_IR)) return nullptr;
   snprintf(err, sizeof err, "내부저항이 %.1fmΩ으로 높아 방전할 수 없음. 부푼 배터리인지 확인", maxOf(g.ir, g.irN));
   return err;

@@ -1,4 +1,4 @@
-"""시뮬레이터 자체 점검 = 보고서 7장 테스트 1~10. 실행: python sim/test_sim.py"""
+"""시뮬레이터 자체 점검 = 보고서 7장 테스트 1~12. 실행: python sim/test_sim.py"""
 import random
 
 from sim import CAP_END_V, CAPACITY_AH, DT, OCV_TABLE, Device, Plant, ocv
@@ -42,10 +42,17 @@ run_until(dev, lambda: dev.t > 600, 700)
 p = dev.pack_v * dev.current_avg
 assert dev.limit == "I_P" and abs(p - 25) < 1.5, (dev.limit, p)
 assert 0 < dev.status()["progress"] < 1 and dev.status()["elapsed"] > 0
-run_until(dev, lambda: dev.state == "DONE", 3 * 3600)
+p40, t_max = None, 0.0   # 온도 한도가 걸린 뒤의 전력과 방열판 최고 온도 (보고서 7장 수치)
+for _ in range(int(3 * 3600 / DT)):
+    dev.step()
+    t_max = max(t_max, dev.temp_sink)
+    if p40 is None and dev.t > 2400:
+        p40 = dev.pack_v * dev.current_avg
+    if dev.state == "DONE":
+        break
 v = [ocv(s) for s in dev.p.soc]
-assert all(abs(x - 3.80) <= 0.05 for x in v), v
-print(f"1 보관 방전 통과: {dev.t / 60:.0f}분, 10분 시점 {p:.1f}W, 셀 OCV {min(v):.3f}~{max(v):.3f}V")
+assert dev.state == "DONE" and t_max <= 95 and all(abs(x - 3.80) <= 0.05 for x in v), (dev.state, t_max, v)
+print(f"1 보관 방전 통과: {dev.t / 60:.0f}분, 10분 시점 {p:.1f}W, 40분 시점 {p40:.1f}W, 방열판 최고 {t_max:.1f}°C, 셀 OCV {min(v):.3f}~{max(v):.3f}V")
 
 # 2 진단: IR·SOH
 dev = ready_dev()
@@ -166,6 +173,24 @@ dev.step()
 dev.step()   # 정지 다음 주기에 plant가 DSG 꺼짐을 반영하고, 그다음 측정에 나온다
 assert dev.state == "STOP" and dev.p.current == 0 and dev.current_avg < 0.05, (dev.state, dev.p.current, dev.current_avg)
 print(f"11 PWM FET 단락 통과: 단락 시 {i_short:.2f}A, 정지 후 보호 FET로 {dev.current_avg:.2f}A")
+
+# 12 저전압 배터리: 셀 하나가 3.5V 아래면 진단 펄스도 걸지 않고, 방전 시작은 저전압 정지로 끝난다
+dev = Device(Plant(6, random.Random(0)))
+dev.p.soc[0] = soc_at(3.40)
+d_max = 0.0
+for _ in range(int(10 / DT)):
+    dev.step()
+    d_max = max(d_max, dev.duty)
+    if dev.state == "SELECT":
+        break
+assert dev.state == "SELECT" and d_max == 0 and dev.ir is None and "UNDERVOLT" in dev.alarms, (dev.state, d_max, dev.ir, dev.alarms)
+start(dev)
+dev.step()
+assert dev.state == "STOP" and dev.trip == "UNDERVOLT" and dev.duty == 0, (dev.state, dev.trip)
+cmd(dev, cmd="fault", name="disconnect")
+run_until(dev, lambda: dev.cell_count == 0, 5)
+assert dev.command({"cmd": "start", "mode": "STORAGE", "targetV": 3.80}) is not None   # 배터리 없이는 시작 거부
+print(f"12 저전압 배터리 통과: 최저 셀 3.40V, 진단 듀티 최대 {d_max:.0f}, 시작 시 {dev.trip} 정지, 배터리 없이 시작 거부")
 
 # 명령 검증
 assert dev.command({"cmd": "start", "mode": "STORAGE", "targetV": 4.1}) is not None

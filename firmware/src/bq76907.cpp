@@ -304,17 +304,21 @@ void setDischargeAllowed(bool on) {
 }
 
 float readCurrent() {
+  static float last = 0;
   int16_t raw;
-  if (!ready || !readI16(CMD_CURRENT, raw)) return 0;
+  if (!ready) return last = 0;
+  if (!readI16(CMD_CURRENT, raw)) return last;   // 한 주기 I2C 오류에 0A를 내면 PI가 듀티를 키운다. 직전 값을 유지
   // 충전 전류가 +다 (SRP가 배터리 − 쪽, SRN이 팩 − 쪽, TRM 5.2). 방전을 +로 쓰려고 부호를 뒤집는다.
   // 공장 trim 기본값은 1mΩ 기준 mA라서 실제 션트 값으로 나눈다. 16비트 범위 때문에 5mΩ에서 약 ±6.5A까지 읽힌다
-  return -raw / 1000.0f / SHUNT_MOHM;
+  return last = -raw / 1000.0f / SHUNT_MOHM;
 }
 
 float readTemp() {
   int16_t code;
   if (!ready) return 25.0f;   // 측정기가 없으면 셀도 0이라 방전이 시작되지 않는다
-  if (!readI16(CMD_TS_MEASUREMENT, code) || code <= TS_CODE_SHORT || code >= TS_CODE_OPEN) return TEMP_READ_FAIL;
+  bool ok = false;
+  for (int attempt = 0; attempt < 2 && !ok; attempt++) ok = readI16(CMD_TS_MEASUREMENT, code);   // readCells와 같이 한 번 더 시도. 한 번의 오류로 과열 정지가 걸리지 않게
+  if (!ok || code <= TS_CODE_SHORT || code >= TS_CODE_OPEN) return TEMP_READ_FAIL;
   const float r = TS_PULLUP_OHM * code / (TS_FULL_CODE - code);   // 풀업과 NTC의 분압
   return 1.0f / (1.0f / 298.15f + logf(r / NTC_R25) / NTC_BETA) - 273.15f;
 }
