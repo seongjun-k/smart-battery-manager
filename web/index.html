@@ -8,13 +8,13 @@
 <script src="chart.umd.min.js"></script>
 <script src="oledfont.js"></script>
 <style>
-  /* 장치 AP 모드에서도 열리도록 외부 글꼴·CDN 없이 시스템 글꼴만 쓴다 */
+  /* 장치 AP 모드에서도 열리도록 외부 글꼴·CDN 없이 시스템 글꼴만 쓴다.
+     흰 바탕, 가는 구분선, 강조색 하나. 칸을 상자로 감싸지 않고 여백과 선으로만 나눈다 */
   :root {
-    --bg: #0b0b0d; --card: #151518; --card2: #1d1d21; --line: #26262c;
-    --text: #f4f4f5; --sub: #a1a1aa; --dim: #6b6b74;
-    --accent: #34d399; --accent-ink: #052e22;
-    --warn: #fbbf24; --bad: #f87171; --hi: #c4b5fd; --lo: #7dd3fc;
-    --r: 18px;
+    --bg: #ffffff; --soft: #f5f5f4; --line: #e7e5e4;
+    --text: #1c1917; --sub: #78716c; --dim: #a8a29e;
+    --accent: #059669; --accent-soft: #d1fae5;
+    --warn: #d97706; --bad: #dc2626; --bad-soft: #fee2e2; --hi: #7c3aed; --lo: #0284c7;
     --font: "Segoe UI Variable Text", "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
@@ -22,192 +22,181 @@
   button, input { font: inherit; color: inherit; }
   [hidden] { display: none !important; }
   .num { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
+  @media (max-width: 720px) { .wrap { padding: 0 16px; } }
 
   /* 위쪽 */
-  header {
-    position: sticky; top: 0; z-index: 10; background: rgba(11, 11, 13, .85); backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--line);
-  }
-  .top { display: flex; align-items: center; gap: 12px; max-width: 980px; margin: 0 auto; padding: 12px 20px; }
-  .title { font-weight: 650; font-size: 16px; letter-spacing: -.2px; }
-  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--card2); color: var(--sub); font-size: 12.5px; }
-  .badge i { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
-  .badge.on i { background: var(--accent); }
+  header { position: sticky; top: 0; z-index: 10; background: rgba(255, 255, 255, .92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .top { display: flex; align-items: center; gap: 14px; height: 56px; }
+  .title { font-weight: 650; letter-spacing: -.2px; white-space: nowrap; }
+  .conn { display: inline-flex; align-items: center; gap: 6px; color: var(--sub); font-size: 13px; white-space: nowrap; }
+  @media (max-width: 720px) { .top { gap: 10px; } #simTag { display: none !important; } }
+  .conn i { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
+  .conn.on i { background: var(--accent); }
   .grow { flex: 1; }
-  .stop {
-    padding: 8px 20px; border: 0; border-radius: 999px; background: var(--bad); color: #fff; font-weight: 700;
-    cursor: pointer; transition: transform .08s, filter .15s;
-  }
-  .stop:hover { filter: brightness(1.08); }
-  .stop:active { transform: scale(.97); }
-  nav { display: flex; gap: 4px; max-width: 980px; margin: 0 auto; padding: 0 20px 10px; overflow-x: auto; scrollbar-width: none; }
-  nav button {
-    padding: 7px 16px; border: 0; border-radius: 999px; background: none; color: var(--sub); cursor: pointer; white-space: nowrap;
-    transition: background .15s, color .15s;
-  }
+  .stop { padding: 7px 18px; border: 1.5px solid var(--bad); border-radius: 8px; background: none; color: var(--bad); font-weight: 650; cursor: pointer; white-space: nowrap; }
+  .stop:hover { background: var(--bad-soft); }
+  nav { display: flex; gap: 22px; overflow-x: auto; scrollbar-width: none; }
+  nav button { padding: 10px 0 11px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; color: var(--sub); cursor: pointer; white-space: nowrap; }
   nav button:hover { color: var(--text); }
-  nav button[aria-selected="true"] { background: var(--card2); color: var(--text); font-weight: 600; }
+  nav button[aria-selected="true"] { color: var(--text); font-weight: 600; border-bottom-color: var(--text); }
 
-  main { max-width: 980px; margin: 0 auto; padding: 20px 20px 48px; display: grid; gap: 16px; }
-  body.offline main { opacity: .5; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 22px; }
-  .card h2 { margin: 0 0 16px; font-size: 15px; font-weight: 600; color: var(--sub); }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 720px) {
-    .top { padding: 10px 16px; } nav { padding: 0 16px 10px; } main { padding: 16px 16px 40px; gap: 12px; }
-    .card { padding: 18px; } .row { grid-template-columns: 1fr; gap: 12px; }
-    .badge.sim { display: none; }
-  }
+  main { padding: 8px 0 64px; }
+  body.offline main { opacity: .45; }
+  .sec { padding: 26px 0; border-top: 1px solid var(--line); }
+  .sec.first { border-top: 0; }
+  .sec h2 { margin: 0 0 16px; font-size: 13px; font-weight: 600; color: var(--sub); letter-spacing: .2px; }
+  .sec-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
+  .sec-h h2 { margin: 0; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
+  .two > .sec { border-top: 0; padding-top: 0; }
+  @media (max-width: 720px) { .two { grid-template-columns: 1fr; } .two > .sec + .sec { border-top: 1px solid var(--line); padding-top: 26px; } }
 
   /* 경고 */
-  .alarm { display: flex; gap: 12px; align-items: center; padding: 14px 18px; border-radius: var(--r); background: rgba(248, 113, 113, .12); border: 1px solid rgba(248, 113, 113, .35); color: #fecaca; }
+  .alarm { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 18px; padding: 12px 16px; border-radius: 10px; background: var(--bad-soft); color: #991b1b; }
   .alarm b { font-weight: 650; }
-  .alarm span { color: #fca5a5; font-size: 13px; }
 
   /* 지금 상태 */
-  .hero { display: flex; gap: 24px; align-items: center; }
+  .hero { display: flex; gap: 28px; align-items: center; padding: 28px 0 24px; }
   .hero .what { flex: 1; min-width: 0; }
-  .chip { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--card2); color: var(--sub); font-size: 12.5px; }
-  .chip.run { background: rgba(52, 211, 153, .14); color: var(--accent); }
-  .hero h1 { margin: 10px 0 4px; font-size: 30px; font-weight: 700; letter-spacing: -.6px; line-height: 1.2; }
+  .state { color: var(--sub); font-size: 13px; }
+  .state.run { color: var(--accent); font-weight: 600; }
+  .hero h1 { margin: 6px 0 4px; font-size: 28px; font-weight: 700; letter-spacing: -.5px; line-height: 1.2; }
   .hero p { margin: 0; color: var(--sub); }
-  .ring { position: relative; width: 132px; height: 132px; flex: none; }
+  .ring { position: relative; width: 104px; height: 104px; flex: none; }
   .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-  .ring circle { fill: none; stroke-width: 9; }
-  .ring .bg { stroke: var(--card2); }
+  .ring circle { fill: none; stroke-width: 7; }
+  .ring .bg { stroke: var(--line); }
   .ring .fg { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .5s; }
   .ring div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  .ring b { font-size: 30px; font-weight: 700; letter-spacing: -.5px; }
-  .ring b small { font-size: 15px; color: var(--sub); font-weight: 500; }
-  .ring span { font-size: 12px; color: var(--sub); }
-  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 22px; }
-  .stat { padding: 14px 16px; border-radius: 14px; background: var(--card2); }
+  .ring b { font-size: 24px; font-weight: 700; letter-spacing: -.4px; line-height: 1; }
+  .ring b small { font-size: 13px; color: var(--sub); font-weight: 500; }
+  .ring span { margin-top: 4px; font-size: 11.5px; color: var(--sub); }
+  .stats { display: flex; gap: 40px; padding-bottom: 26px; }
   .stat small { display: block; color: var(--sub); font-size: 13px; }
-  .stat b { font-size: 26px; font-weight: 650; letter-spacing: -.4px; }
-  .stat em { font-style: normal; color: var(--sub); margin-left: 3px; }
+  .stat b { font-size: 28px; font-weight: 650; letter-spacing: -.4px; line-height: 1.25; }
+  .stat em { font-style: normal; color: var(--sub); font-size: 15px; margin-left: 3px; }
   @media (max-width: 720px) {
-    .hero { flex-direction: column-reverse; align-items: flex-start; gap: 16px; }
-    .hero h1 { font-size: 25px; } .ring { width: 112px; height: 112px; }
-    .stats { gap: 8px; } .stat { padding: 12px; } .stat b { font-size: 21px; }
+    .hero { gap: 18px; padding: 22px 0 18px; } .hero h1 { font-size: 24px; } .ring { width: 88px; height: 88px; } .ring b { font-size: 20px; }
+    .stats { gap: 24px; } .stat b { font-size: 24px; }
   }
 
   /* 모드 시작 */
-  .seg { display: flex; flex-wrap: wrap; gap: 8px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
   .seg input { position: absolute; opacity: 0; pointer-events: none; }
-  .seg label {
-    padding: 9px 16px; border-radius: 999px; background: var(--card2); color: var(--sub); cursor: pointer;
-    border: 1px solid transparent; transition: background .15s, color .15s;
-  }
-  .seg input:checked + label { background: var(--text); color: var(--bg); font-weight: 600; }
+  .seg label { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); color: var(--sub); cursor: pointer; }
+  .seg label:hover { color: var(--text); }
+  .seg input:checked + label { background: var(--text); border-color: var(--text); color: #fff; font-weight: 600; }
   .seg input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .seg.off { opacity: .35; pointer-events: none; }
   .desc { margin: 10px 0 0; color: var(--sub); font-size: 14px; }
-  .fields { display: flex; flex-wrap: wrap; gap: 20px 32px; margin-top: 20px; align-items: flex-end; }
+  .fields { display: flex; flex-wrap: wrap; gap: 16px 32px; margin-top: 18px; align-items: flex-end; }
   .fields > div > small { display: block; margin-bottom: 8px; color: var(--sub); font-size: 13px; }
-  .cap { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: var(--card2); }
-  .cap input { width: 72px; border: 0; background: none; outline: none; font-weight: 600; }
+  .cap { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); }
+  .cap input { width: 68px; border: 0; background: none; outline: none; font-weight: 600; }
+  .cap:focus-within { border-color: var(--text); }
   .cap span { color: var(--sub); }
-  .go {
-    margin-left: auto; padding: 12px 30px; border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
-    font-weight: 700; cursor: pointer; transition: filter .15s, transform .08s;
-  }
+  .go { margin-left: auto; padding: 10px 28px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 650; cursor: pointer; }
   .go:hover { filter: brightness(1.06); }
-  .go:active { transform: scale(.97); }
-  .go:disabled { background: var(--card2); color: var(--dim); cursor: not-allowed; }
-  .why { margin: 12px 0 0; color: var(--dim); font-size: 13px; }
+  .go:disabled { background: var(--soft); color: var(--dim); cursor: not-allowed; }
+  .why { margin: 12px 0 0; color: var(--bad); font-size: 13px; }
 
   /* 셀 */
-  .cells-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
-  .cells-h h2 { margin: 0; }
-  .pill { padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--card2); }
+  .pill { font-size: 13px; font-weight: 600; }
   .pill.ok { color: var(--accent); } .pill.warn { color: var(--warn); } .pill.bad { color: var(--bad); }
-  .cell { display: grid; grid-template-columns: 34px 1fr 64px 62px; gap: 12px; align-items: center; padding: 7px 0; }
-  .cell .n { color: var(--sub); font-size: 13px; }
-  .cell .bar { position: relative; height: 8px; border-radius: 999px; background: var(--card2); overflow: hidden; }
-  .cell .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--sub); transition: width .4s; }
-  .cell.hi .bar i { background: var(--hi); } .cell.lo .bar i { background: var(--lo); }
-  .cell.bal .bar i { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: .45; } }
-  .cell .v { text-align: right; font-weight: 600; }
-  .cell .d { text-align: right; color: var(--dim); font-size: 13px; }
+  .cells { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  @media (max-width: 720px) { .cells { grid-template-columns: repeat(3, 1fr); gap: 8px; } }
+  .cell { padding: 12px 12px 10px; border-radius: 10px; background: var(--soft); }
+  .cell .n { display: block; color: var(--sub); font-size: 12.5px; }
+  .cell .v { display: block; margin-top: 2px; font-weight: 650; font-size: 17px; letter-spacing: -.2px; white-space: nowrap; }
+  .cell .d { display: block; color: var(--dim); font-size: 12.5px; }
   .cell .d.warn { color: var(--warn); } .cell .d.bad { color: var(--bad); }
+  .cell .bar { height: 3px; margin-top: 10px; border-radius: 999px; background: var(--line); overflow: hidden; }
+  .cell .bar i { display: block; height: 100%; border-radius: 999px; background: var(--sub); transition: width .4s; }
+  .cell.hi { color: var(--hi); } .cell.lo { color: var(--lo); }
+  .cell.hi .n, .cell.lo .n { color: inherit; }
+  .cell.hi .bar i { background: var(--hi); } .cell.lo .bar i { background: var(--lo); }
+  .cell.bal { background: #fef3c7; color: #92400e; }
+  .cell.bal .n { color: inherit; }
+  .cell.bal .bar i { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .4; } }
   .note { margin: 12px 0 0; color: var(--dim); font-size: 13px; }
-  .empty { padding: 28px 0; text-align: center; color: var(--dim); }
+  .empty { padding: 24px 0; text-align: center; color: var(--dim); }
   @media (prefers-reduced-motion: reduce) { .cell.bal .bar i { animation: none; } }
 
   /* 요약 두 칸 */
-  .big { font-size: 34px; font-weight: 700; letter-spacing: -.6px; }
-  .big small { font-size: 16px; font-weight: 500; color: var(--sub); margin-left: 4px; }
-  .kv { margin: 14px 0 0; padding: 0; list-style: none; }
-  .kv li { display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid var(--line); color: var(--sub); }
-  .kv b { color: var(--text); font-weight: 600; }
-  .meter { height: 6px; margin-top: 12px; border-radius: 999px; background: var(--card2); overflow: hidden; }
+  .big { font-size: 30px; font-weight: 700; letter-spacing: -.5px; line-height: 1.2; }
+  .big small { font-size: 15px; font-weight: 500; color: var(--sub); margin-left: 4px; }
+  .meter { height: 4px; margin-top: 12px; border-radius: 999px; background: var(--line); overflow: hidden; }
   .meter i { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--accent); transition: width .5s, background .3s; }
+  .kv { margin: 10px 0 0; padding: 0; list-style: none; }
+  .kv li { display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid var(--line); color: var(--sub); }
+  .kv li:first-child { border-top: 0; }
+  .kv b { color: var(--text); font-weight: 600; }
 
   /* 그래프 */
-  .chart { position: relative; height: 260px; }
+  .chart { position: relative; height: 250px; }
   .chart .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 0; }
 
   /* 장치 */
-  .oled-card { display: flex; flex-direction: column; align-items: center; gap: 18px; }
-  .screen { width: 100%; max-width: 520px; padding: 10px; border-radius: 14px; background: #000; }
+  .oled-sec { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .screen { width: 100%; max-width: 480px; padding: 10px; border-radius: 12px; background: #111; }
   #oled { display: block; width: 100%; aspect-ratio: 2 / 1; }
-  .keys { display: flex; gap: 10px; }
-  .keys button {
-    padding: 9px 20px; border: 1px solid var(--line); border-radius: 999px; background: var(--card2); cursor: pointer; font-weight: 600;
-  }
-  .keys button.red { color: var(--bad); }
+  .keys { display: flex; gap: 8px; }
+  .keys button { padding: 8px 18px; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; font-weight: 600; }
+  .keys button:hover { background: var(--soft); }
+  .keys button.red { color: var(--bad); border-color: var(--bad); }
   .keys button:disabled { opacity: .4; cursor: not-allowed; }
   .view { color: var(--sub); font-size: 13px; }
   .switch { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; }
   .switch small { display: block; color: var(--dim); font-size: 13px; }
   .switch input { position: absolute; opacity: 0; }
-  .switch i { position: relative; width: 44px; height: 26px; flex: none; border-radius: 999px; background: var(--card2); transition: background .2s; }
-  .switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--sub); transition: transform .2s, background .2s; }
+  .switch i { position: relative; width: 42px; height: 24px; flex: none; border-radius: 999px; background: var(--line); transition: background .2s; }
+  .switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .2s; }
   .switch input:checked + i { background: var(--accent); }
-  .switch input:checked + i::after { transform: translateX(18px); background: #fff; }
+  .switch input:checked + i::after { transform: translateX(18px); }
   .switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .faults { display: flex; flex-wrap: wrap; gap: 8px; }
-  .faults button { padding: 8px 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--card2); cursor: pointer; }
-  .faults button:hover { border-color: var(--warn); }
+  .faults { display: flex; flex-wrap: wrap; gap: 6px; }
+  .faults button { padding: 7px 14px; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; color: var(--sub); }
+  .faults button:hover { color: var(--text); border-color: var(--text); }
 
   /* 기록 */
   .log { list-style: none; margin: 0; padding: 0; }
-  .log li { display: flex; gap: 14px; padding: 11px 0; border-top: 1px solid var(--line); }
+  .log li { display: flex; gap: 14px; padding: 10px 0; border-top: 1px solid var(--line); }
   .log li:first-child { border-top: 0; }
   .log time { color: var(--dim); font-size: 13px; min-width: 58px; }
-  .log li.err span { color: #fca5a5; }
+  .log li.err span { color: var(--bad); }
 </style>
 </head>
 <body class="offline">
 <header>
-  <div class="top">
-    <span class="title">스마트 배터리 관리</span>
-    <span class="badge" id="conn"><i></i><span>연결 끊김</span></span>
-    <span class="badge sim" id="simTag" hidden>시뮬레이터</span>
-    <span class="grow"></span>
-    <button class="stop" id="stop" type="button">정지</button>
+  <div class="wrap">
+    <div class="top">
+      <span class="title">스마트 배터리 관리</span>
+      <span class="conn" id="conn"><i></i><span>연결 끊김</span></span>
+      <span class="conn" id="simTag" hidden>시뮬레이터</span>
+      <span class="grow"></span>
+      <button class="stop" id="stop" type="button" hidden>정지</button>
+    </div>
+    <nav role="tablist" aria-label="화면">
+      <button role="tab" data-tab="home" aria-selected="true">개요</button>
+      <button role="tab" data-tab="chart" aria-selected="false">그래프</button>
+      <button role="tab" data-tab="device" aria-selected="false">장치</button>
+      <button role="tab" data-tab="log" aria-selected="false">기록</button>
+    </nav>
   </div>
-  <nav role="tablist" aria-label="화면">
-    <button role="tab" data-tab="home" aria-selected="true">개요</button>
-    <button role="tab" data-tab="chart" aria-selected="false">그래프</button>
-    <button role="tab" data-tab="device" aria-selected="false">장치</button>
-    <button role="tab" data-tab="log" aria-selected="false">기록</button>
-  </nav>
 </header>
 
-<main>
+<main class="wrap">
   <!-- 개요 -->
-  <div class="alarm" id="alarm" role="alert" data-pane="home" hidden></div>
-
-  <section class="card" data-pane="home" aria-label="지금 상태">
+  <section data-pane="home" aria-label="지금 상태">
+    <div class="alarm" id="alarm" role="alert" hidden></div>
     <div class="hero">
       <div class="what">
-        <span class="chip" id="chip">-</span>
+        <span class="state" id="chip">-</span>
         <h1 id="heroTitle">연결 대기</h1>
         <p id="heroNote">장치에 연결하는 중입니다.</p>
       </div>
-      <div class="ring">
+      <div class="ring" id="ring" hidden>
         <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="bg" cx="50" cy="50" r="44"/><circle class="fg" id="ringFg" cx="50" cy="50" r="44"/></svg>
         <div><b class="num" id="pct">-</b><span id="eta"></span></div>
       </div>
@@ -219,7 +208,7 @@
     </div>
   </section>
 
-  <section class="card" id="startCard" data-pane="home" aria-label="모드 시작">
+  <section class="sec" id="startCard" data-pane="home" aria-label="모드 시작">
     <h2>모드 시작</h2>
     <form id="startForm">
       <div class="seg" id="modes"></div>
@@ -241,14 +230,14 @@
     </form>
   </section>
 
-  <section class="card" data-pane="home" aria-label="셀 전압">
-    <div class="cells-h"><h2>셀 전압</h2><span class="pill num" id="delta" hidden></span></div>
-    <div id="cells"></div>
+  <section class="sec" data-pane="home" aria-label="셀 전압">
+    <div class="sec-h"><h2>셀 전압</h2><span class="pill num" id="delta" hidden></span></div>
+    <div class="cells" id="cells"></div>
     <p class="note" id="cellNote"></p>
   </section>
 
-  <div class="row" data-pane="home">
-    <section class="card" aria-label="건강도">
+  <div class="sec two" data-pane="home">
+    <section class="sec" aria-label="건강도">
       <h2>건강도</h2>
       <div class="big num" id="soh">-</div>
       <div class="meter"><i id="sohBar"></i></div>
@@ -257,7 +246,7 @@
         <li>측정 용량 <b class="num" id="cap">-</b></li>
       </ul>
     </section>
-    <section class="card" aria-label="냉각">
+    <section class="sec" aria-label="냉각">
       <h2>방열판</h2>
       <div class="big num" id="tSink">-</div>
       <div class="meter"><i id="tBar"></i></div>
@@ -269,17 +258,17 @@
   </div>
 
   <!-- 그래프 -->
-  <section class="card" data-pane="chart" hidden aria-label="팩 전압과 전류">
+  <section class="sec first" data-pane="chart" hidden aria-label="팩 전압과 전류">
     <h2>팩 전압과 전류</h2>
     <div class="chart"><canvas id="chartVI"></canvas><div class="empty" id="emptyVI">작업을 시작하면 기록합니다</div></div>
   </section>
-  <section class="card" data-pane="chart" hidden aria-label="방열판 온도">
+  <section class="sec" data-pane="chart" hidden aria-label="방열판 온도">
     <h2>방열판 온도</h2>
     <div class="chart"><canvas id="chartT"></canvas><div class="empty" id="emptyT">작업을 시작하면 기록합니다</div></div>
   </section>
 
   <!-- 장치 -->
-  <section class="card oled-card" data-pane="device" hidden aria-label="장치 화면">
+  <section class="sec first oled-sec" data-pane="device" hidden aria-label="장치 화면">
     <div class="screen"><canvas id="oled" width="512" height="256" aria-label="장치 OLED 화면"></canvas></div>
     <div class="keys">
       <button type="button" id="kNext">NEXT</button>
@@ -288,10 +277,10 @@
     </div>
     <span class="view" id="view"></span>
   </section>
-  <section class="card" data-pane="device" hidden aria-label="설정">
+  <section class="sec" data-pane="device" hidden aria-label="설정">
     <label class="switch"><span>부저 버튼음<small>정지음과 경고음은 끌 수 없습니다</small></span><input type="checkbox" id="keyTone" checked><i></i></label>
   </section>
-  <section class="card" id="faultCard" data-pane="device" hidden aria-label="결함 주입">
+  <section class="sec" id="faultCard" data-pane="device" hidden aria-label="결함 주입">
     <h2>결함 주입 (시뮬레이터 전용)</h2>
     <div class="faults">
       <button type="button" data-fault="imbalance">셀 불균형</button>
@@ -304,7 +293,7 @@
   </section>
 
   <!-- 기록 -->
-  <section class="card" data-pane="log" hidden aria-label="기록">
+  <section class="sec first" data-pane="log" hidden aria-label="기록">
     <ol class="log" id="log"></ol>
     <div class="empty" id="logEmpty">아직 기록이 없습니다</div>
   </section>
@@ -375,9 +364,10 @@ function log(text, err) {
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => { $('conn').className = 'badge on'; $('conn').lastChild.textContent = '연결됨'; document.body.classList.remove('offline'); };
+  ws.onopen = () => { $('conn').className = 'conn on'; $('conn').lastChild.textContent = '연결됨'; document.body.classList.remove('offline'); };
   ws.onclose = () => {
-    $('conn').className = 'badge'; $('conn').lastChild.textContent = '연결 끊김'; document.body.classList.add('offline');
+    $('conn').className = 'conn'; $('conn').lastChild.textContent = '연결 끊김'; document.body.classList.add('offline');
+    $('stop').hidden = true;
     syncStart();
     setTimeout(connect, 1000);
   };
@@ -394,8 +384,8 @@ function send(cmd) {
 }
 
 /* ---------- 그래프 ---------- */
-Chart.defaults.color = '#a1a1aa';
-Chart.defaults.borderColor = '#26262c';
+Chart.defaults.color = '#78716c';
+Chart.defaults.borderColor = '#e7e5e4';
 Chart.defaults.font.family = '"Segoe UI", "Malgun Gothic", system-ui, sans-serif';
 // 기준선 (가로 점선 + 이름표)
 const guides = {
@@ -432,13 +422,13 @@ function chart(canvas, sets, axes, lines) {
     },
   });
 }
-const chartVI = chart($('chartVI'), [['팩 전압 (V)', '#7dd3fc', 'y'], ['전류 (A)', '#34d399', 'y1']], {
-  y: { position: 'left', grid: { color: '#1d1d21' } },
+const chartVI = chart($('chartVI'), [['팩 전압 (V)', '#0284c7', 'y'], ['전류 (A)', '#059669', 'y1']], {
+  y: { position: 'left', grid: { color: '#f0eeec' } },
   y1: { position: 'right', grid: { drawOnChartArea: false }, min: 0, suggestedMax: 2 },
 }, []);
-const chartT = chart($('chartT'), [['방열판 (°C)', '#fb923c', 'y']], {
-  y: { suggestedMin: 20, suggestedMax: 100, grid: { color: '#1d1d21' } },
-}, [[80, 'rgba(251,191,36,.9)', '80 °C 감속'], [95, 'rgba(248,113,113,.9)', '95 °C 정지']]);
+const chartT = chart($('chartT'), [['방열판 (°C)', '#ea580c', 'y']], {
+  y: { suggestedMin: 20, suggestedMax: 100, grid: { color: '#f0eeec' } },
+}, [[80, '#d97706', '80 °C 감속'], [95, '#dc2626', '95 °C 정지']]);
 function clearCharts() {
   [chartVI, chartT].forEach(c => { c.data.datasets.forEach(d => { d.data = []; }); c.update('none'); });
   $('emptyVI').hidden = $('emptyT').hidden = false;
@@ -575,7 +565,7 @@ function renderCells(s) {
   }
   if (box.querySelectorAll('.cell').length !== s.cells.length) {
     box.innerHTML = s.cells.map((_, i) =>
-      `<div class="cell"><span class="n">C${i + 1}</span><div class="bar"><i></i></div><span class="v num"></span><span class="d num"></span></div>`).join('');
+      `<div class="cell"><span class="n">C${i + 1}</span><span class="v num"></span><span class="d num"></span><div class="bar"><i></i></div></div>`).join('');
   }
   const lo = Math.min(...s.cells), hi = Math.max(...s.cells), dmv = (hi - lo) * 1000;
   const marked = dmv > BAL_DONE_MV;   // 균형 상태에선 최고·최저 표시 안 함
@@ -592,7 +582,7 @@ function renderCells(s) {
   $('delta').className = 'pill num ' + (dmv <= BAL_DONE_MV ? 'ok' : dmv <= 50 ? 'warn' : 'bad');
   const balN = (s.bal || []).filter(Boolean).length;
   $('cellNote').textContent = balN ? `노란 막대 ${balN}개 셀을 밸런싱하고 있습니다.`
-    : marked ? '보라색이 가장 높은 셀, 하늘색이 가장 낮은 셀입니다.' : '';
+    : marked ? '보라색이 가장 높은 셀, 파란색이 가장 낮은 셀입니다.' : '';
 }
 
 /* ---------- 지금 상태 ---------- */
@@ -602,7 +592,8 @@ function renderHero(s) {
   const running = s.state === 'RUN';
   const pc = s.state === 'DONE' ? 1 : running ? s.progress : null;
   $('chip').textContent = running ? `실행 중 · ${ko('mode', s.mode)}` : ko('state', s.state) || s.state;
-  $('chip').className = 'chip' + (running ? ' run' : '');
+  $('chip').className = 'state' + (running ? ' run' : '');
+  $('stop').hidden = !(running || s.state === 'DIAG');
   $('heroTitle').textContent = running ? { STORAGE: '보관 방전 중', BALANCE: '밸런싱 중', CAPACITY: '용량 테스트 중' }[s.mode] || s.mode
     : { IDLE: '배터리를 연결하세요', DIAG: '진단하는 중', SELECT: '모드를 고르세요', DONE: '작업 완료', HOLD: '결과 표시 중', STOP: '정지됨' }[s.state] || s.state;
   let note;
@@ -618,6 +609,7 @@ function renderHero(s) {
     }[s.state] || '';
   }
   $('heroNote').textContent = note;
+  $('ring').hidden = pc == null;
   $('ringFg').style.strokeDashoffset = RING_C * (1 - (pc || 0));
   $('pct').innerHTML = pc == null ? '-' : `${Math.round(pc * 100)}<small>%</small>`;
   const left = running && pc != null ? eta(pc, s.elapsed) : null;
