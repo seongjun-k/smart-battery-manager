@@ -12,3 +12,9 @@ cad/build.log
 fp-info-cache
 hw/*-backups/
 .history/
+.mcp.json
+*.log
+# 과제 원본과 직접 쓴 계획서는 저장소에 올리지 않는다
+docs/로봇하드웨어설계 2학기 수행평가.pdf
+docs/로봇하드웨어설계 2학기 수행평가.hwpx
+docs/스마트_LiPo_배터리_매니저_계획서_v3.docx
