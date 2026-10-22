@@ -2,7 +2,7 @@
 
 치수는 이 파일의 상수가 원본이다. 바꾼 뒤 다시 실행하면 cad/ 아래 파일을 덮어쓴다.
 좌표: 원점은 케이스 바깥 앞-왼쪽-바닥 모서리, X 오른쪽, Y 뒤쪽, Z 위쪽, 단위 mm.
-PCB 외곽과 커넥터·고정 구멍 위치는 KiCad hw/smart_bms.kicad_pcb 배치에 맞췄다.
+PCB 외곽과 커넥터·고정 구멍 위치는 KiCad hw/smart_bms.kicad_pcb 좌표로 적고 bx()·by()로 바꾼다.
 
 실행 (host, 프로젝트 루트): python cad/build_housing.py
 """
@@ -15,28 +15,43 @@ from win32com.client import constants as C
 HERE = os.path.dirname(os.path.abspath(__file__))
 TPL = r"C:\Users\Public\Documents\Autodesk\Inventor 2027\Templates\ko-KR\Metric"
 
-# ---- 케이스 ----
+# ---- KiCad 보드 좌표 → 케이스 좌표 ----
+# KiCad hw/smart_bms.kicad_pcb: 외곽 x 100~200, y 100~172 (y가 앞쪽으로 커진다). 보드 뒤-왼쪽 모서리가 (100, 100)
 T = 2.5                    # 벽, 바닥, 덮개 두께
-W, D = 135.0, 105.0        # 바깥 가로(X), 세로(Y)
-H_SHELL = 56.0             # 하부 케이스 높이 (덮개 아래면). 팬 위로 덮개 립이 지나갈 여유가 높이를 정한다
+GAP = 0.5                  # 벽과 PCB 사이
+PCB_W, PCB_D = 100.0, 72.0
+
+
+def bx(x):
+    return T + GAP + (x - 100.0)
+
+
+def by(y):
+    return T + GAP + (172.0 - y)
+
+
+# ---- 케이스 ----
+W, D = PCB_W + 2 * (T + GAP), PCB_D + 2 * (T + GAP)      # 바깥 가로(X), 세로(Y)
+H_SHELL = 50.0             # 하부 케이스 높이 (덮개 아래면). 방열판 위 끝(PCB 위 38.1)과 덮개 나사 보스가 정한다
 H = H_SHELL + T            # 전체 높이
+BOSS = 7.0                 # 덮개 나사 보스 (모서리 7x7, 덮개 아래면에서 7mm만 내려와 팬 위로 지나간다)
 
-# ---- PCB (KiCad 외곽: 128x98mm, 모서리 10mm 따냄) ----
-PCB = (3.5, 3.5, 131.5, 101.5)   # x0, y0, x1, y1. 모서리는 덮개 기둥 자리만큼 따낸다
-PCB_NOTCH = 10.0
-PCB_Z = 8.0                      # PCB 아래면 높이. 바닥 위 기둥 5.5mm
+# ---- PCB: 뒤-왼쪽은 팬 자리, 앞쪽 가운데는 ESP32 안테나 자리로 따낸다 (KiCad 좌표) ----
+PCB_Z = 6.0                      # PCB 아래면 높이. 바닥 위 기둥 3.5mm (아래면 BQ76907·THT 리드 여유)
 PCB_TH = 1.6
-# PCB 고정 구멍 (KiCad hw/smart_bms.kicad_pcb의 H1~H4). 뒤-왼쪽은 팬 아래(팬 바닥이 PCB 위 0.9mm)를 피해 옮겼다
-PCB_POSTS = ((15.5, 15.5), (119.5, 15.5), (18.0, 98.0), (119.5, 89.5))
+FAN_CUT = (100.0, 121.0, 100.0, 142.0)      # x0, x1, y0, y1
+ANT_CUT = (112.0, 132.0, 165.6, 172.0)
+HOLES = ((103.5, 168.5), (196.6, 168.6), (156.0, 138.5), (196.5, 121.0))   # H1~H4
 
-# ---- 팬 NF-A4x20: 왼쪽 벽 안쪽, 배기 방향 ----
-FAN = (T, 55.0, 10.5)            # x0, y0, z0. PCB 위로 띄우고 방열판 높이에 맞춤
+# ---- 팬 NF-A4x20: 따낸 자리 바닥에 세워 왼쪽 벽으로 배기 ----
 FAN_S, FAN_TH, FAN_HOLE = 40.0, 20.0, 32.0
+FAN = (T, by(142.0) + 1.0, T)    # x0, y0, z0
 
 # ---- 방열판 Wakefield 657-15ABPE: PCB에 납땜 핀으로 세움 (카탈로그 도면, 압출 프로파일 6533) ----
 # 가운데 세로판(1.6mm) 양쪽 가운데 17.0mm가 소자 홈이고, 핀 묶음은 Y 양 끝에 있다. 솔더 핀은 세로판 중심선 위
-HS_X0, HS_YC = 26.0, 75.0
+HS_KICAD = (134.5, 121.0)        # KiCad HS1 위치 (세로판 중심)
 HS_L, HS_W, HS_TH, HS_WEB, HS_POCKET = 38.1, 41.9, 25.4, 1.6, 17.0   # 높이, 폭(Y), 두께(X), 세로판, 홈
+HS_X0, HS_YC = bx(HS_KICAD[0]) - HS_TH / 2, by(HS_KICAD[1])
 HS_FINS = 5                       # 한쪽 끝 핀 묶음의 판 수 (모양만)
 HS_HOLE_Z = 21.6                  # 장착 구멍 높이 (PCB 윗면 기준)
 
@@ -47,21 +62,25 @@ TO_HOLE = 5.33                         # 몸체 위 끝에서 구멍 중심 (데
 TO_LEAD = 2.4                          # 몸체 뒷면에서 리드 중심 (데이터시트 2.15~2.67)
 TO_Z0 = PCB_Z + PCB_TH + HS_HOLE_Z - (TO_LEN - TO_HOLE)   # 몸체 아래 끝: 구멍을 방열판 구멍에 맞춘 높이
 
-# ---- 덮개 부품: OLED, 패널 버튼 ----
-OLED = (85.0, 20.0)              # 모듈 앞-왼쪽 모서리 (덮개 아래면에 붙음)
+# ---- 덮개 부품: OLED, 패널 버튼 (방열판·팬 위를 피해 앞쪽과 오른쪽) ----
+OLED = (10.0, 4.0)               # 모듈 앞-왼쪽 모서리 (덮개 아래면에 붙음). 앞-왼쪽 덮개 보스(x 9.5까지)를 피한다
 OLED_S = 27.3
 OLED_WIN = (24.0, 13.0)          # 표시 창
-BTN_NEXT, BTN_OK, BTN_STOP = (70.0, 24.0), (70.0, 42.0), (25.0, 28.0)
+BTN_NEXT, BTN_OK, BTN_STOP = (46.0, 17.0), (61.0, 17.0), (92.5, 40.0)   # STOP은 오른쪽 덮개 립(x 101.2~)을 피한다
 BTN_D, STOP_D = 12.0, 16.0       # 패널 장착 구멍 지름
 
-# ---- 옆면 커넥터 (PCB 가장자리) ----
-USB = (14.0, 24.0)               # 왼쪽 벽, Y 구간
-XT60 = (18.0, 36.0)              # 오른쪽 벽, Y 구간
-JST = (44.0, 66.0)               # 오른쪽 벽, Y 구간
+# ---- 옆면 커넥터 (KiCad 좌표의 Y 구간 → 케이스 Y) ----
+USB = (by(163.0), by(153.0))     # 왼쪽 벽 (J2 중심 y 158)
+XT60 = (by(116.4), by(100.4))    # 오른쪽 벽 (J1 핀 y 104.8, 112.0)
+JST = (by(147.0), by(126.0))     # 오른쪽 벽 (J3 핀 y 129~144)
+
+# ---- 부저 BUJEON BRS-03SC (지름 12mm, 두께 4mm): 오른쪽 벽 안쪽에 양면테이프로 붙이고 벽에 소리 구멍. PCB BZ1(XH 2핀)과 케이블 ----
+BZ_Y, BZ_ZC = by(158.0), 20.0     # 케이스 좌표 (부저 중심)
+BZ_D, BZ_T = 12.0, 4.0
 
 COLORS = {"housing_bottom": (210, 210, 205), "housing_lid": (190, 190, 185), "ref_pcb": (20, 110, 60),
           "ref_fan": (120, 80, 50), "ref_resistor": (220, 170, 40), "ref_heatsink": (60, 60, 65), "ref_oled": (30, 30, 40),
-          "ref_parts": (40, 40, 40)}
+          "ref_parts": (40, 40, 40), "ref_tall": (70, 70, 120)}
 
 app = w32.gencache.EnsureDispatch("Inventor.Application")
 app.Visible = True
@@ -126,18 +145,28 @@ class Part:
         return path
 
 
+def bosses(p, z0, z1, hole=None):
+    """덮개 나사 보스 4개 (모서리). hole이 있으면 그 반지름으로 구멍을 판다."""
+    h = BOSS / 2
+    for cx, cy in ((T + h, T + h), (W - T - h, T + h), (T + h, D - T - h), (W - T - h, D - T - h)):
+        if hole is None:
+            p.box(cx - h, cy - h, z0, cx + h, cy + h, z1)
+        else:
+            p.cyl("z", (cx, cy), hole, z0, z1, cut=True)
+
+
 def bottom():
     p = Part("housing_bottom")
     p.box(0, 0, 0, W, D, H_SHELL)
     p.box(T, T, T, W - T, D - T, H_SHELL + 1, cut=True)
-    # 덮개 나사 기둥 4개 (M3 열 압입 인서트 구멍 4.0)
-    for cx, cy in ((T + 3.5, T + 3.5), (W - T - 3.5, T + 3.5), (T + 3.5, D - T - 3.5), (W - T - 3.5, D - T - 3.5)):
-        p.box(cx - 3.5, cy - 3.5, T, cx + 3.5, cy + 3.5, H_SHELL)
-        p.cyl("z", (cx, cy), 2.0, H_SHELL - 8, H_SHELL + 1, cut=True)
-    # PCB 기둥 4개
-    for cx, cy in PCB_POSTS:
+    # 덮개 나사 보스: 덮개 아래면에서 BOSS만큼만 (팬 위 끝보다 위). M3 열 압입 인서트 구멍 4.0
+    bosses(p, H_SHELL - BOSS, H_SHELL)
+    bosses(p, H_SHELL - BOSS + 1, H_SHELL + 1, hole=2.0)
+    # PCB 기둥 4개 (H1~H4)
+    for hx, hy in HOLES:
+        cx, cy = bx(hx), by(hy)
         p.cyl("z", (cx, cy), 3.0, T, PCB_Z)
-        p.cyl("z", (cx, cy), 2.0, T + 1, PCB_Z + 1, cut=True)
+        p.cyl("z", (cx, cy), 1.25, T + 0.5, PCB_Z + 1, cut=True)      # M3 셀프 태핑 구멍 2.5
     # 배기구: 팬 앞 왼쪽 벽, 5mm 슬롯
     fy0, fz0 = FAN[1], FAN[2]
     for i in range(6):
@@ -148,43 +177,45 @@ def bottom():
     for dy in (-FAN_HOLE / 2, FAN_HOLE / 2):
         for dz in (-FAN_HOLE / 2, FAN_HOLE / 2):
             p.cyl("x", (fyc + dy, fzc + dz), 1.7, -1, T + 1, cut=True)
-    # 흡기구: 뒷면, 저항 뒤에서 오른쪽으로. 바람은 저항과 방열판을 지나 왼쪽 팬으로 나간다
-    for i in range(8):
-        x = 45 + i * 7
-        p.box(x, D - T - 1, 14, x + 4, D + 1, 48, cut=True)
+    # 흡기구: 뒷면, 방열판 오른쪽(방전 FET·C42 뒤). 바람은 왼쪽으로 FET와 방열판 핀 사이를 지나 팬으로 나간다
+    for i in range(5):
+        x = bx(150.0) + i * 6.5
+        p.box(x, D - T - 1, PCB_Z + PCB_TH + 8, x + 4, D + 1, H_SHELL - 6, cut=True)
     # 커넥터 구멍
     zb = PCB_Z + PCB_TH
     p.box(-1, USB[0], zb - 0.5, T + 1, USB[1], zb + 4.0, cut=True)
     p.box(W - T - 1, XT60[0], zb - 0.5, W + 1, XT60[1], zb + 9.0, cut=True)
     p.box(W - T - 1, JST[0], zb - 0.5, W + 1, JST[1], zb + 7.0, cut=True)
+    # 부저 소리 구멍: 지름 2mm 5개 (가운데 + 3mm 십자)
+    for dy, dz in ((0, 0), (3, 0), (-3, 0), (0, 3), (0, -3)):
+        p.cyl("x", (BZ_Y + dy, BZ_ZC + dz), 1.0, W - T - 1, W + 1, cut=True)
     return p.save()
 
 
 def lid():
     p = Part("housing_lid")
     p.box(0, 0, H_SHELL, W, D, H)
-    for cx, cy in ((T + 3.5, T + 3.5), (W - T - 3.5, T + 3.5), (T + 3.5, D - T - 3.5), (W - T - 3.5, D - T - 3.5)):
-        p.cyl("z", (cx, cy), 1.7, H_SHELL - 1, H + 1, cut=True)
-    # 덮개 테두리 립: 케이스 안쪽에 끼워 위치를 잡는다
-    p.box(T + 0.3, T + 8, H_SHELL - 2, T + 2.3, D - T - 8, H_SHELL)
-    p.box(W - T - 2.3, T + 8, H_SHELL - 2, W - T - 0.3, D - T - 8, H_SHELL)
+    bosses(p, H_SHELL - 1, H + 1, hole=1.7)
+    # 덮개 테두리 립: 케이스 안쪽에 끼워 위치를 잡는다 (보스 사이)
+    p.box(T + 0.3, T + BOSS + 1, H_SHELL - 2, T + 2.3, D - T - BOSS - 1, H_SHELL)
+    p.box(W - T - 2.3, T + BOSS + 1, H_SHELL - 2, W - T - 0.3, D - T - BOSS - 1, H_SHELL)
     ox, oy = OLED
     cx, cy = ox + OLED_S / 2, oy + OLED_S / 2
     p.box(cx - OLED_WIN[0] / 2, cy - OLED_WIN[1] / 2, H_SHELL - 1, cx + OLED_WIN[0] / 2, cy + OLED_WIN[1] / 2, H + 1, cut=True)
-    for (bx, by), d in ((BTN_NEXT, BTN_D), (BTN_OK, BTN_D), (BTN_STOP, STOP_D)):
-        p.cyl("z", (bx, by), d / 2, H_SHELL - 1, H + 1, cut=True)
+    for (px, py), d in ((BTN_NEXT, BTN_D), (BTN_OK, BTN_D), (BTN_STOP, STOP_D)):
+        p.cyl("z", (px, py), d / 2, H_SHELL - 1, H + 1, cut=True)
     return p.save()
 
 
 def ref_parts():
     """조립 확인용 단순 형상. 실제 부품 모델이 아니다."""
     out = []
+    zb = PCB_Z + PCB_TH
     p = Part("ref_pcb")
-    p.box(PCB[0], PCB[1], PCB_Z, PCB[2], PCB[3], PCB_Z + PCB_TH)
-    n = PCB_NOTCH
-    for x0, y0 in ((PCB[0], PCB[1]), (PCB[2] - n, PCB[1]), (PCB[0], PCB[3] - n), (PCB[2] - n, PCB[3] - n)):
-        p.box(x0 - 1 if x0 == PCB[0] else x0, y0 - 1 if y0 == PCB[1] else y0, PCB_Z - 1,
-              x0 + n if x0 == PCB[0] else x0 + n + 1, y0 + n if y0 == PCB[1] else y0 + n + 1, PCB_Z + PCB_TH + 1, cut=True)
+    p.box(bx(100.0), by(172.0), PCB_Z, bx(200.0), by(100.0), zb)
+    for x0, x1, y0, y1 in (FAN_CUT, ANT_CUT):        # 가장자리에 닿는 쪽은 1mm 더 넓게 잘라 얇은 막이 남지 않게
+        p.box(bx(x0) - (1 if x0 == 100.0 else 0), by(y1) - (1 if y1 == 172.0 else 0), PCB_Z - 1,
+              bx(x1), by(y0) + (1 if y0 == 100.0 else 0), zb + 1, cut=True)
     out.append(p.save())
 
     p = Part("ref_fan")
@@ -194,7 +225,6 @@ def ref_parts():
     p.cyl("x", (y0 + FAN_S / 2, z0 + FAN_S / 2), 8.0, x0, x0 + FAN_TH)
     out.append(p.save())
 
-    zb = PCB_Z + PCB_TH
     web = HS_X0 + HS_TH / 2                  # 세로판 중심
     face = web + HS_WEB / 2                  # 저항이 붙는 세로판 면 (+X)
     p = Part("ref_heatsink")
@@ -219,13 +249,21 @@ def ref_parts():
     out.append(p.save())
 
     p = Part("ref_parts")
-    for (bx, by), d, depth in ((BTN_NEXT, BTN_D, 22), (BTN_OK, BTN_D, 22), (BTN_STOP, STOP_D, 26)):
-        p.cyl("z", (bx, by), d / 2 - 0.3, H_SHELL - depth, H + 2)
-    zb = PCB_Z + PCB_TH
-    p.box(PCB[0], USB[0] + 0.5, zb, PCB[0] + 7.5, USB[1] - 0.5, zb + 3.2)                  # USB-C
-    p.box(PCB[2] - 16, XT60[0] + 0.5, zb, W - 0.5, XT60[1] - 0.5, zb + 8.2)               # XT60
-    p.box(PCB[2] - 9, JST[0] + 0.5, zb, W - 0.5, JST[1] - 0.5, zb + 6.0)                  # JST-XH 7핀
-    p.box(30, 3.5, zb, 48, 29, zb + 3.2)                                                   # ESP32-S3 모듈 18×25.5, 안테나가 앞 가장자리
+    for (cx, cy), d, depth in ((BTN_NEXT, BTN_D, 22), (BTN_OK, BTN_D, 22), (BTN_STOP, STOP_D, 26)):
+        p.cyl("z", (cx, cy), d / 2 - 0.3, H_SHELL - depth, H + 2)
+    p.box(bx(100.0) - 1.1, USB[0] + 0.5, zb, bx(108.0), USB[1] - 0.5, zb + 3.2)            # USB-C (가장자리 밖 1.1)
+    p.box(bx(179.6), XT60[0] + 0.5, zb, W - 0.5, XT60[1] - 0.5, zb + 8.2)                    # XT60
+    p.box(bx(190.5), JST[0] + 0.5, zb, W - 0.5, JST[1] - 0.5, zb + 6.0)                     # JST-XH 7핀
+    p.box(bx(113.0), by(171.6), zb, bx(131.0), by(146.0), zb + 3.2)                          # ESP32-S3 모듈, 안테나가 앞 따냄 위
+    p.cyl("x", (BZ_Y, BZ_ZC), BZ_D / 2, W - T - BZ_T, W - T)                                 # 부저 (오른쪽 벽 안쪽)
+    out.append(p.save())
+
+    p = Part("ref_tall")   # 키 큰 PCB 부품 (버튼·OLED와의 간섭 확인용)
+    p.cyl("z", (bx(171.0), by(121.5)), 5.0, zb, zb + 10.5)                                   # C42 10x10.5
+    for x0, x1, y0, y1, h in ((100.1, 111.3, 142.1, 149.1, 12.0),                           # J4 팬 헤더 + 플러그
+                              (133.0, 146.5, 145.6, 152.4, 16.0), (133.0, 146.5, 152.5, 159.3, 16.0),   # J6·J5 (XH + 케이블 플러그)
+                              (183.0, 191.5, 148.1, 154.9, 16.0)):                         # BZ1 (XH 2핀 + 플러그)
+        p.box(bx(x0), by(y1), zb, bx(x1), by(y0), zb + h)
     out.append(p.save())
     return out
 
