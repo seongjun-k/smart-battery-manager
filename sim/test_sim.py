@@ -35,7 +35,7 @@ def soc_at(v):
             return s0 + (s1 - s0) * (v - v0) / (v1 - v0)
 
 
-# 1 보관 방전: 6S 만충 → 3.80V, 평균 25W
+# 1 보관 방전: 6S 만충 → 3.80V, 10분 시점 25W 상한
 dev = ready_dev()
 start(dev)
 run_until(dev, lambda: dev.t > 600, 700)
