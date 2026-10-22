@@ -17,7 +17,9 @@ TPL = r"C:\Users\Public\Documents\Autodesk\Inventor 2027\Templates\ko-KR\Metric"
 
 # ---- KiCad 보드 좌표 → 케이스 좌표 ----
 # KiCad hw/smart_bms.kicad_pcb: 외곽 x 100~200, y 100~172 (y가 앞쪽으로 커진다). 보드 뒤-왼쪽 모서리가 (100, 100)
-T = 2.5                    # 벽, 바닥, 덮개 두께
+T = 3.0                    # 벽, 바닥, 덮개 두께
+R_OUT, R_IN = 6.0, 1.5      # 바깥 세로 모서리, 안쪽 세로 모서리 반지름. 안쪽은 PCB 직각 모서리(벽에서 0.5)에 닿지 않는 1.7 이하
+R_TOP, R_BASE = 2.0, 1.5    # 덮개 윗면 둘레, 바닥 둘레 모깎기
 GAP = 0.5                  # 벽과 PCB 사이
 PCB_W, PCB_D = 100.0, 72.0
 
@@ -32,12 +34,12 @@ def by(y):
 
 # ---- 케이스 ----
 W, D = PCB_W + 2 * (T + GAP), PCB_D + 2 * (T + GAP)      # 바깥 가로(X), 세로(Y)
-H_SHELL = 56.0             # 하부 케이스 높이 (덮개 아래면). 방열판 위 끝(PCB 위 38.1) 위에 공기가 세로판을 넘는 공간 약 10mm를 둔다
+PCB_Z = T + 3.5                  # PCB 아래면 높이. 바닥 위 기둥 3.5mm (아래면 BQ76907·THT 리드 여유)
+H_SHELL = PCB_Z + 50.0     # 하부 케이스 높이 (덮개 아래면). 방열판 위 끝(PCB 위 38.1) 위에 공기가 세로판을 넘는 공간 약 10mm를 둔다
 H = H_SHELL + T            # 전체 높이
 BOSS = 7.0                 # 덮개 나사 보스 (모서리 7x7, 덮개 아래면에서 7mm만 내려와 팬 위로 지나간다)
 
 # ---- PCB: 뒤-왼쪽은 팬 자리, 앞쪽 가운데는 ESP32 안테나 자리로 따낸다 (KiCad 좌표) ----
-PCB_Z = 6.0                      # PCB 아래면 높이. 바닥 위 기둥 3.5mm (아래면 BQ76907·THT 리드 여유)
 PCB_TH = 1.6
 FAN_CUT = (100.0, 121.0, 100.0, 142.0)      # x0, x1, y0, y1
 ANT_CUT = (112.0, 147.0, 166.05, 172.0)
@@ -130,6 +132,33 @@ class Part:
         sk.SketchCircles.AddByCenterRadius(self._pt(sk, *p), cm(r))
         self._extrude(sk, a1 - a0, cut)
 
+    def slot(self, axis, u0, u1, z0, z1, a0, a1):
+        """axis 방향으로 벽을 뚫는 세로 장공. u0~u1은 폭, z0~z1은 높이, 위아래 끝은 반원."""
+        r, uc = (u1 - u0) / 2, (u0 + u1) / 2
+        lo = (a0, u0) if axis == "x" else (u0, a0)
+        hi = (a1, u1) if axis == "x" else (u1, a1)
+        self.box(*lo, z0 + r, *hi, z1 - r, cut=True)
+        for z in (z0 + r, z1 - r):
+            self.cyl(axis, (uc, z), r, a0, a1, cut=True)
+
+    def fillet(self, r, pred):
+        """양 끝점(mm)이 pred(a, b)를 만족하는 모서리를 반지름 r로 모깎기한다."""
+        ec = app.TransientObjects.CreateEdgeCollection()
+        for e in self.cd.SurfaceBodies.Item(1).Edges:
+            try:
+                a, b = ([10 * c for c in (v.Point.X, v.Point.Y, v.Point.Z)] for v in (e.StartVertex, e.StopVertex))
+            except Exception:   # 꼭짓점 없는 닫힌 원 모서리
+                continue
+            if pred(a, b):
+                ec.Add(e)
+        self.cd.Features.FilletFeatures.AddSimple(ec, cm(r))
+
+    def rounded_block(self, z0, z1, r_vert, z_edge, r_edge):
+        """바깥 외곽 블록: 세로 모서리 r_vert, z_edge 높이의 둘레 모서리 r_edge로 깎는다."""
+        self.box(0, 0, z0, W, D, z1)
+        self.fillet(r_vert, lambda a, b: near(a[0], b[0]) and near(a[1], b[1]))
+        self.fillet(r_edge, lambda a, b: near(a[2], z_edge) and near(b[2], z_edge))
+
     def save(self):
         rgb = COLORS.get(self.name)
         if rgb:
@@ -145,6 +174,10 @@ class Part:
         return path
 
 
+def near(a, b):
+    return abs(a - b) < 0.01
+
+
 def bosses(p, z0, z1, hole=None):
     """덮개 나사 보스 4개 (모서리). hole이 있으면 그 반지름으로 구멍을 판다."""
     h = BOSS / 2
@@ -157,8 +190,10 @@ def bosses(p, z0, z1, hole=None):
 
 def bottom():
     p = Part("housing_bottom")
-    p.box(0, 0, 0, W, D, H_SHELL)
+    p.rounded_block(0, H_SHELL, R_OUT, 0, R_BASE)
     p.box(T, T, T, W - T, D - T, H_SHELL + 1, cut=True)
+    inner = [(x, y) for x in (T, W - T) for y in (T, D - T)]
+    p.fillet(R_IN, lambda a, b: near(a[0], b[0]) and near(a[1], b[1]) and any(near(a[0], x) and near(a[1], y) for x, y in inner))
     # 덮개 나사 보스: 덮개 아래면에서 BOSS만큼만 (팬 위 끝보다 위). M3 열 압입 인서트 구멍 4.0
     bosses(p, H_SHELL - BOSS, H_SHELL)
     bosses(p, H_SHELL - BOSS + 1, H_SHELL + 1, hole=2.0)
@@ -168,23 +203,23 @@ def bottom():
         p.cyl("z", (cx, cy), 3.0, T, PCB_Z)
         p.cyl("z", (cx, cy), 1.25, T + 0.5, PCB_Z + 1, cut=True)      # M3 셀프 태핑 구멍 2.5
     # 배기구: 팬 앞 왼쪽 벽. 열린 면적을 팬 날개 고리(약 930mm²)에 맞춘다.
-    # 가운데 5개는 거의 전체 높이, 바깥 2개는 팬 나사 구멍 사이 높이만 (약 900mm²)
+    # 가운데 5개는 거의 전체 높이, 바깥 2개는 팬 나사 구멍 사이 높이만, 끝은 반원 (약 880mm²)
     fy0, fz0 = FAN[1], FAN[2]
     fyc, fzc = fy0 + FAN_S / 2, fz0 + FAN_S / 2
     for i in range(5):
         y = fyc - 13 + i * 5.5
-        p.box(-1, y, fz0 + 2.5, T + 1, y + 4, fz0 + FAN_S - 2.5, cut=True)
+        p.slot("x", y, y + 4, fz0 + 2.5, fz0 + FAN_S - 2.5, -1, T + 1)
     for y in (fyc - 18.5, fyc + 14.5):
-        p.box(-1, y, fzc - 12.5, T + 1, y + 4, fzc + 12.5, cut=True)
+        p.slot("x", y, y + 4, fzc - 12.5, fzc + 12.5, -1, T + 1)
     # 팬 나사 구멍 4개 (32mm 간격)
     for dy in (-FAN_HOLE / 2, FAN_HOLE / 2):
         for dz in (-FAN_HOLE / 2, FAN_HOLE / 2):
             p.cyl("x", (fyc + dy, fzc + dz), 1.7, -1, T + 1, cut=True)
-    # 흡기구: 뒷면, 방열판 오른쪽(방전 FET·C42 뒤)부터 XT60 앞까지. 6 x 3.6mm (약 960mm²).
+    # 흡기구: 뒷면, 방열판 오른쪽(방전 FET·C42 뒤)부터 XT60 앞까지. 6 x 3.6mm, 끝은 반원 (약 940mm²).
     # 바람은 왼쪽으로 FET 위를 지나 방열판 +X쪽 핀 사이로 들어가 위로 오르고, 세로판을 넘어 -X쪽 핀 사이로 내려가 팬이 왼쪽 벽으로 뺀다
     for i in range(6):
         x = bx(148.2) + i * 5.1
-        p.box(x, D - T - 1, PCB_Z + PCB_TH + 1, x + 3.6, D + 1, H_SHELL - 3, cut=True)
+        p.slot("y", x, x + 3.6, PCB_Z + PCB_TH + 1, H_SHELL - 3, D - T - 1, D + 1)
     # 팬 바닥 쪽 막이: PCB 아래 틈(바닥~PCB 아래면)으로 들어온 공기가 방열판을 거치지 않고 팬으로 가지 않게
     # 팬 자리 따냄의 오른쪽 가장자리와 앞 가장자리를 따라 세운다
     rz = PCB_Z - 0.2
@@ -203,7 +238,7 @@ def bottom():
 
 def lid():
     p = Part("housing_lid")
-    p.box(0, 0, H_SHELL, W, D, H)
+    p.rounded_block(H_SHELL, H, R_OUT, H, R_TOP)
     bosses(p, H_SHELL - 1, H + 1, hole=1.7)
     # 덮개 테두리 립: 케이스 안쪽에 끼워 위치를 잡는다 (보스 사이)
     p.box(T + 0.3, T + BOSS + 1, H_SHELL - 2, T + 2.3, D - T - BOSS - 1, H_SHELL)
