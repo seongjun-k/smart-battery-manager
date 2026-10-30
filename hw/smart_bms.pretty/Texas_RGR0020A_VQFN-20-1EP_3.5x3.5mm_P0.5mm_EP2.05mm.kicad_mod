@@ -292,12 +292,12 @@
 		(roundrect_rratio 0.2)
 		(uuid "5bd471d3-64aa-5a08-a6c4-80ceaeebbe17")
 	)
-	(model "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm.step"
+	(model "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/QFN-20-1EP_4x4mm_P0.5mm_EP2.5x2.5mm.step"
 		(offset
 			(xyz 0 0 0)
 		)
 		(scale
-			(xyz 1 1 1)
+			(xyz 0.875 0.875 1)
 		)
 		(rotate
 			(xyz 0 0 0)

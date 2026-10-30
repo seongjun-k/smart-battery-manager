@@ -230,6 +230,9 @@ def write_footprints():
     disk = [(-math.sqrt(36 - (y + 0.25) ** 2), y, 0, math.sqrt(36 - (y + 0.25) ** 2), y + 0.5, 4.0) for y in [-6 + 0.5 * i for i in range(24)]]
     write_wrl(os.path.join(HERE, '3d', 'BUJEON_BRS-03SC.wrl'), [
         ((0.10, 0.10, 0.11), disk + [(4.0, -2.75, 0, 8.5, 2.75, 4.0)])])
+    # LMR36015 RNX VQFN-HR 2x3mm: KiCad 10.0.1 라이브러리에 STEP이 없어 몸체만 넣는다. 높이 0.9mm는 추정
+    write_wrl(os.path.join(HERE, '3d', 'Texas_RNX0012C_VQFN-14_2x3mm.wrl'), [
+        ((0.16, 0.16, 0.17), [(-1.0, -1.5, 0, 1.0, 1.5, 0.9)])])
     model = lambda name: ['model', Q('${KIPRJMOD}/3d/%s.wrl' % name),
                           ['offset', ['xyz', 0, 0, 0]], ['scale', ['xyz', 1, 1, 1]], ['rotate', ['xyz', 0, 0, 0]]]
     # Ohmite TEH100 (rev 7/25-1): 리드 간격 9.90~10.42mm → 10.16mm, 리드 1.37~1.67 x 0.55~1.07mm → 대각 최대 1.98mm.
@@ -304,8 +307,9 @@ def write_footprints():
            fp_line(1.4, -1.86, 1.86, -1.86, 'F.SilkS'), fp_line(1.86, 1.4, 1.86, 1.86, 'F.SilkS'),
            fp_line(1.86, 1.86, 1.4, 1.86, 'F.SilkS'), fp_line(-1.4, 1.86, -1.86, 1.86, 'F.SilkS'),
            fp_rect(-2.2, -2.2, 2.2, 2.2, 'F.CrtYd', 0.05)] + pads + [
-           ['model', Q('${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm.step'),
-            ['offset', ['xyz', 0, 0, 0]], ['scale', ['xyz', 1, 1, 1]], ['rotate', ['xyz', 0, 0, 0]]],
+           # 3.5x3.5 STEP이 KiCad 라이브러리에 없어 4x4 모델을 평면으로 0.875배 줄여 쓴다
+           ['model', Q('${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/QFN-20-1EP_4x4mm_P0.5mm_EP2.5x2.5mm.step'),
+            ['offset', ['xyz', 0, 0, 0]], ['scale', ['xyz', 0.875, 0.875, 1]], ['rotate', ['xyz', 0, 0, 0]]],
            ['embedded_fonts', 'no']]
     # BUJEON BRS-03SC 12mm SMD 피에조: 데이터시트가 없어 판매 사진(지름 12mm 기준)에서 잰 값이다 [확인 필요].
     # 바닥 패드 2개가 탭 방향과 수직으로 가운데 띠를 사이에 두고 마주 본다. 피에조라 극성은 없다

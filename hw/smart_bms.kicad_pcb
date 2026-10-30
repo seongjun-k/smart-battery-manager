@@ -362,7 +362,7 @@
 			(uuid "073a60f5-9c63-45cd-bfe4-85db56a28e3c")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Package_SON.3dshapes/VSONP-8-1EP_5x6_P1.27mm.step"
+		(model "${KICAD10_3DMODEL_DIR}/Package_SON.3dshapes/WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4.3mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -862,7 +862,7 @@
 			(uuid "d5e2c15d-f3c9-4504-8115-7e004367e857")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Fuse.3dshapes/Fuse_Littelfuse-NANO2-451_453.step"
+		(model "${KIPRJMOD}/3d/Fuse_Littelfuse-NANO2-451_453.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -12225,7 +12225,7 @@
 			(uuid "a1e7907a-c0b3-4772-ba6f-a9452b99c43b")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_AMASS.3dshapes/AMASS_XT60PW-M_1x02_P7.20mm_Horizontal.step"
+		(model "${KIPRJMOD}/3d/AMASS_XT60PW-M_1x02_P7.20mm_Horizontal.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -15932,7 +15932,7 @@
 			(uuid "177771f5-c4eb-474c-87bf-35857ba50545")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/Texas_RNX0012C_VQFN-14-11-1EP_2x3mm_P0.5mm_EP0.25x1.825mm.step"
+		(model "${KIPRJMOD}/3d/Texas_RNX0012C_VQFN-14_2x3mm.wrl"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -16990,7 +16990,7 @@
 			(uuid "cd469a26-2373-4a98-a255-c800be48539b")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Package_SON.3dshapes/VSONP-8-1EP_5x6_P1.27mm.step"
+		(model "${KICAD10_3DMODEL_DIR}/Package_SON.3dshapes/WSON-8-1EP_6x5mm_P1.27mm_EP3.4x4.3mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
@@ -18201,12 +18201,12 @@
 			(uuid "22746867-71c9-4139-b76e-ed5520468ac6")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/QFN-20-1EP_3.5x3.5mm_P0.5mm_EP2x2mm.step"
+		(model "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/QFN-20-1EP_4x4mm_P0.5mm_EP2.5x2.5mm.step"
 			(offset
 				(xyz 0 0 0)
 			)
 			(scale
-				(xyz 1 1 1)
+				(xyz 0.875 0.875 1)
 			)
 			(rotate
 				(xyz 0 0 0)
