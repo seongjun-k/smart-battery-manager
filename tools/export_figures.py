@@ -59,7 +59,8 @@ def placement(tmp):
     d = ImageDraw.Draw(out)
     x0, y0, x1, y1 = ImageOps.invert(imgs["bot"]).getbbox()
     small = ImageFont.truetype(r"C:\Windows\Fonts\malgunbd.ttf", 22)
-    d.multiline_text(((x0 + x1) // 2, y1 + 6), "U2\nBQ76907", font=small, fill="#1f6feb", anchor="ma", align="center", spacing=0)
+    # 아래쪽은 윗면 C32·C33 이름과 겹쳐 왼쪽에 단다
+    d.multiline_text((x0 - 8, (y0 + y1) // 2 + 15), "U2\nBQ76907", font=small, fill="#1f6feb", anchor="rm", align="right", spacing=0)
     w, h = out.size
     legend = Image.new("RGB", (w, 60), "white")
     ImageDraw.Draw(legend).text((10, 30), "검정: 윗면 부품   파랑: 아랫면 부품 (위에서 본 위치)", font=font, fill="#333333", anchor="lm")
