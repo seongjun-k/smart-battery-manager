@@ -3,6 +3,7 @@
 실행 (프로젝트 루트, Orca 터미널 권장 — 3D 렌더가 1~2분 걸린다): python tools/export_figures.py [--no-3d]
 KiCad를 GUI로 고치는 중이면 먼저 저장한다 (kicad-cli 는 파일만 읽는다).
 """
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -37,6 +38,17 @@ def pdf_png(pdf, png, dpi, crop=True, clip=None):
         print(png.relative_to(ROOT))
 
 
+def bottom_parts():
+    """아랫면 풋프린트 참조 → 위치 (mm, 보드 좌표)"""
+    out = {}
+    for blk in PCB.read_text(encoding="utf-8").split("\n\t(footprint ")[1:]:
+        head = blk[:400]
+        if '(layer "B.Cu")' in head:
+            x, y = re.search(r"\(at ([-\d.]+) ([-\d.]+)", head).groups()
+            out[re.search(r'\(property "Reference" "([^"]+)"', head).group(1)] = (float(x), float(y))
+    return out
+
+
 def placement(tmp):
     """윗면 부품 외형·실크는 검정, 아랫면 부품(BQ76907 등)은 파랑으로 한 장에 겹친다."""
     parts = {
@@ -57,10 +69,19 @@ def placement(tmp):
     # 아랫면 부품 이름과 범례
     font = ImageFont.truetype(r"C:\Windows\Fonts\malgunbd.ttf", 30)
     d = ImageDraw.Draw(out)
-    x0, y0, x1, y1 = ImageOps.invert(imgs["bot"]).getbbox()
     small = ImageFont.truetype(r"C:\Windows\Fonts\malgunbd.ttf", 22)
-    # 아래쪽은 윗면 C32·C33 이름과 겹쳐 왼쪽에 단다
-    d.multiline_text((x0 - 8, (y0 + y1) // 2 + 15), "U2\nBQ76907", font=small, fill="#1f6feb", anchor="rm", align="right", spacing=0)
+    tiny = ImageFont.truetype(r"C:\Windows\Fonts\malgunbd.ttf", 17)
+    inv =ImageOps.invert(imgs["bot"])
+    k = 400 / 25.4                                   # mm → px (400 dpi). PDF 좌표는 pt, 그림은 clip 모서리가 원점
+    for ref, (mx, my) in bottom_parts().items():
+        cx, cy = mx * k - clip.x0 * 400 / 72, my * k - clip.y0 * 400 / 72
+        win = (int(cx - 6 * k), int(cy - 6 * k), int(cx + 6 * k), int(cy + 6 * k))
+        bx0, by0, bx1, by1 = inv.crop(win).getbbox()
+        x0, y0, x1, y1 = win[0] + bx0, win[1] + by0, win[0] + bx1, win[1] + by1
+        if ref == "U2":     # 아래쪽은 윗면 C32·C33 이름과 겹쳐 왼쪽에 단다
+            d.multiline_text((x0 - 8, (y0 + y1) // 2 + 15), "U2\nBQ76907", font=small, fill="#1f6feb", anchor="rm", align="right", spacing=0)
+        else:               # 아랫면 실크와 같은 몸체 위쪽 (몸체 왼쪽 안은 윗면 D3 이름 자리)
+            d.text(((x0 + x1) // 2, y0 - 2), ref, font=tiny, fill="#1f6feb", anchor="mb")
     w, h = out.size
     legend = Image.new("RGB", (w, 60), "white")
     ImageDraw.Draw(legend).text((10, 30), "검정: 윗면 부품   파랑: 아랫면 부품 (위에서 본 위치)", font=font, fill="#333333", anchor="lm")
