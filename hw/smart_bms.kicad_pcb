@@ -14816,6 +14816,17 @@
 				(xyz 0 0 0)
 			)
 		)
+		(model "${KIPRJMOD}/3d/Semitec_103AT-2_on_HS1.wrl"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "Resistor_SMD:R_0805_2012Metric"
 		(layer "F.Cu")

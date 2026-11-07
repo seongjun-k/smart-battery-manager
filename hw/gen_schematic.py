@@ -193,18 +193,99 @@ def fp_tht(n, x, y, sx, sy, drill, shape):
             ['layers', Q('*.Cu'), Q('*.Mask')], ['remove_unused_layers', 'no'], ['uuid', Q(uid())]]
 
 
+def _ax(axis, u, v, a):
+    """축 axis 방향 좌표 a와 그 수직면 좌표 (u, v)를 (x, y, z)로"""
+    return {'x': (a, u, v), 'y': (u, a, v), 'z': (u, v, a)}[axis]
+
+
+def prism(axis, poly, a0, a1):
+    """볼록 다각형 poly [(u, v), ...]를 axis 방향으로 a0~a1만큼 세운 기둥의 면 [(꼭짓점들, 바깥 방향), ...]"""
+    cu, cv = sum(p[0] for p in poly) / len(poly), sum(p[1] for p in poly) / len(poly)
+    faces = [([_ax(axis, u, v, a0) for u, v in poly], _ax(axis, 0, 0, -1)),
+             ([_ax(axis, u, v, a1) for u, v in poly], _ax(axis, 0, 0, 1))]
+    for (u0, v0), (u1, v1) in zip(poly, poly[1:] + poly[:1]):
+        faces.append(([_ax(axis, u0, v0, a0), _ax(axis, u1, v1, a0), _ax(axis, u1, v1, a1), _ax(axis, u0, v0, a1)],
+                      _ax(axis, (u0 + u1) / 2 - cu, (v0 + v1) / 2 - cv, 0)))
+    return faces
+
+
+def cyl(axis, cu, cv, r, a0, a1, n=64):
+    return prism(axis, [(cu + r * math.cos(2 * math.pi * i / n), cv + r * math.sin(2 * math.pi * i / n)) for i in range(n)], a0, a1)
+
+
+def holed(axis, u0, v0, u1, v1, cu, cv, r, a0, a1, n=64):
+    """사각 판 (u0~u1, v0~v1)에 원 구멍 (cu, cv, r)을 axis 방향으로 뚫은 면. 앞뒷면은 구멍 둘레와 바깥 사각형을 잇는 사각형 띠"""
+    angs = sorted({2 * math.pi * i / n for i in range(n)} |
+                  {math.atan2(v - cv, u - cu) % (2 * math.pi) for u in (u0, u1) for v in (v0, v1)})
+    inner, outer = [], []
+    for t in angs:
+        c, s = math.cos(t), math.sin(t)
+        k = min(d for d in ((u1 - cu) / c if c > 1e-12 else None, (u0 - cu) / c if c < -1e-12 else None,
+                            (v1 - cv) / s if s > 1e-12 else None, (v0 - cv) / s if s < -1e-12 else None) if d is not None)
+        inner.append((cu + r * c, cv + r * s))
+        outer.append((cu + k * c, cv + k * s))
+    faces = [f for f in prism(axis, [(u0, v0), (u1, v0), (u1, v1), (u0, v1)], a0, a1)[2:]]   # 바깥 옆면 4개
+    m = len(angs)
+    for i in range(m):
+        j = (i + 1) % m
+        for a, d in ((a0, -1), (a1, 1)):
+            faces.append(([_ax(axis, *inner[i], a), _ax(axis, *inner[j], a), _ax(axis, *outer[j], a), _ax(axis, *outer[i], a)],
+                          _ax(axis, 0, 0, d)))
+        (iu, iv), (ju, jv) = inner[i], inner[j]
+        faces.append(([_ax(axis, iu, iv, a0), _ax(axis, ju, jv, a0), _ax(axis, ju, jv, a1), _ax(axis, iu, iv, a1)],
+                      _ax(axis, cu - (iu + ju) / 2, cv - (iv + jv) / 2, 0)))                       # 구멍 벽은 구멍 안쪽이 바깥
+    return faces
+
+
+def wire(pts, r):
+    """3D 꺾은선 pts를 따라가는 굵기 2r 사각 단면 선. 꺾이는 곳이 비지 않게 구간마다 양 끝을 r씩 늘린다"""
+    faces = []
+    for p, q in zip(pts, pts[1:]):
+        d = [b - a for a, b in zip(p, q)]
+        L = math.sqrt(sum(c * c for c in d))
+        d = [c / L for c in d]
+        h = (0, 0, 1) if abs(d[2]) < 0.9 else (1, 0, 0)
+        e1 = [d[1] * h[2] - d[2] * h[1], d[2] * h[0] - d[0] * h[2], d[0] * h[1] - d[1] * h[0]]
+        n1 = math.sqrt(sum(c * c for c in e1))
+        e1 = [c / n1 for c in e1]
+        e2 = [d[1] * e1[2] - d[2] * e1[1], d[2] * e1[0] - d[0] * e1[2], d[0] * e1[1] - d[1] * e1[0]]
+        ring = lambda c, t: [tuple(c[i] + t * d[i] + r * (s1 * e1[i] + s2 * e2[i]) for i in range(3))
+                             for s1, s2 in ((1, 1), (-1, 1), (-1, -1), (1, -1))]
+        a, b = ring(p, -r), ring(q, r)
+        faces += [(a, [-c for c in d]), (b, d)]
+        for i in range(4):
+            j = (i + 1) % 4
+            faces.append(([a[i], a[j], b[j], b[i]], [(a[i][k] + a[j][k]) / 2 - p[k] + r * d[k] for k in range(3)]))
+    return faces
+
+
+def _outward(poly, out):
+    """뉴얼 법선이 out 쪽을 향하게 꼭짓점 순서를 맞춘다"""
+    n = [0.0, 0.0, 0.0]
+    for (x0, y0, z0), (x1, y1, z1) in zip(poly, poly[1:] + poly[:1]):
+        n[0] += (y0 - y1) * (z0 + z1)
+        n[1] += (z0 - z1) * (x0 + x1)
+        n[2] += (x0 - x1) * (y0 + y1)
+    return poly if sum(a * b for a, b in zip(n, out)) >= 0 else poly[::-1]
+
+
 def write_wrl(path, parts):
-    """상자 여러 개로 된 VRML 3D 모델. parts = [(색 (r,g,b), [(x0,y0,z0,x1,y1,z1), ...]), ...], 풋프린트 좌표 mm (y 아래쪽).
-    KiCad는 VRML 1단위를 0.1인치로 읽고 y가 위쪽이라 2.54로 나누고 y를 뒤집는다."""
+    """VRML 3D 모델. parts = [(색 (r,g,b), [상자 (x0,y0,z0,x1,y1,z1) 또는 prism·cyl·holed·wire가 만든 면 목록, ...]), ...],
+    풋프린트 좌표 mm (y 아래쪽). KiCad는 VRML 1단위를 0.1인치로 읽고 y가 위쪽이라 2.54로 나누고 y를 뒤집는다."""
     out = ['#VRML V2.0 utf8']
-    for rgb, boxes in parts:
+    for rgb, shapes in parts:
         pts, idx = [], []
-        for x0, y0, z0, x1, y1, z1 in boxes:
+        faces = []
+        for s in shapes:
+            if isinstance(s[0], (int, float)):
+                x0, y0, z0, x1, y1, z1 = s
+                s = prism('z', [(x0, y0), (x1, y0), (x1, y1), (x0, y1)], z0, z1)
+            faces += s
+        for poly, o in faces:
             b = len(pts)
-            pts += [(x / 2.54, -y / 2.54, z / 2.54) for z in (z0, z1) for y in (y0, y1) for x in (x0, x1)]
-            # y를 뒤집으면 좌우가 바뀌므로 바깥을 향하는 면 순서도 뒤집힌 쪽으로 적는다 (안쪽을 향하면 고품질 렌더에서 까맣게 나온다)
-            for f in ((1, 3, 2, 0), (6, 7, 5, 4), (4, 5, 1, 0), (3, 7, 6, 2), (2, 6, 4, 0), (5, 7, 3, 1)):
-                idx.append(' '.join(str(b + i) for i in f) + ' -1')
+            # y를 뒤집으면 좌우가 바뀌므로 꼭짓점 순서도 뒤집는다 (면이 안쪽을 향하면 고품질 렌더에서 까맣게 나온다)
+            pts += [(x / 2.54, -y / 2.54, z / 2.54) for x, y, z in _outward(poly, o)[::-1]]
+            idx.append(' '.join(str(i) for i in range(b, len(pts))) + ' -1')
         out.append('Shape { appearance Appearance { material Material { diffuseColor %.2f %.2f %.2f specularColor 0.3 0.3 0.3 shininess 0.3 } }\n'
                    ' geometry IndexedFaceSet { solid FALSE coord Coordinate { point [ %s ] }\n coordIndex [ %s ] } }'
                    % (*rgb, ', '.join('%.4f %.4f %.4f' % p for p in pts), ' '.join(idx)))
@@ -218,8 +299,10 @@ def write_footprints():
     os.makedirs(os.path.join(HERE, '3d'), exist_ok=True)
     # 3D 모델은 cad/build_housing.py 의 참조 부품과 같은 치수 (HS_*, TO_*). 모양만 맞춘 상자 모델이다
     to_z0 = 21.6 - (20.8 - 5.33)   # 저항 몸체 아래 끝: 장착 구멍(PCB 위 21.6mm)이 몸체 위 끝에서 5.33mm
+    # 장착 구멍: Ohmite TEH100 rev 7/25-1 치수도, 지름 3.53~3.73mm, 중심은 몸체 위 끝에서 5.07~5.59mm
     write_wrl(os.path.join(HERE, '3d', 'TEH100_TO-247.wrl'), [
-        ((0.16, 0.16, 0.17), [(5.08 - 7.95, -2.4, to_z0, 5.08 + 7.95, 2.6, to_z0 + 20.8)]),          # 몸체
+        ((0.16, 0.16, 0.17), [holed('y', 5.08 - 7.95, to_z0, 5.08 + 7.95, to_z0 + 20.8,
+                                    5.08, to_z0 + 20.8 - 5.33, 3.63 / 2, -2.4, 2.6)]),               # 몸체
         ((0.82, 0.82, 0.78), [(x - 0.6, -0.3, -3.0, x + 0.6, 0.3, to_z0) for x in (0, 10.16)])])   # 리드
     fins = [(-12.7, y0 + i * (12.45 - 1.2) / 4, 0, 12.7, y0 + i * (12.45 - 1.2) / 4 + 1.2, 38.1)
             for y0 in (-20.95, 20.95 - 12.45) for i in range(5)]
@@ -227,9 +310,18 @@ def write_footprints():
         ((0.30, 0.31, 0.34), [(-0.8, -20.95, 0, 0.8, 20.95, 38.1)] + fins),                       # 세로판 + 양 끝 핀 묶음
         ((0.82, 0.82, 0.78), [(-1.2, y - 1.2, -4.0, 1.2, y + 1.2, 0) for y in (-12.7, 12.7)])])    # 솔더 핀
     # BRS-03SC: 지름 12mm, 두께 4mm 원통에 소리 구멍이 있는 탭(폭 5.5, 2.5mm 돌출). 원점은 원통 중심, 탭은 +X
-    disk = [(-math.sqrt(36 - (y + 0.25) ** 2), y, 0, math.sqrt(36 - (y + 0.25) ** 2), y + 0.5, 4.0) for y in [-6 + 0.5 * i for i in range(24)]]
     write_wrl(os.path.join(HERE, '3d', 'BUJEON_BRS-03SC.wrl'), [
-        ((0.10, 0.10, 0.11), disk + [(4.0, -2.75, 0, 8.5, 2.75, 4.0)])])
+        ((0.10, 0.10, 0.11), [cyl('z', 0, 0, 6.0, 0, 4.0), (4.0, -2.75, 0, 8.5, 2.75, 4.0)])])
+    # RT1 NTC 103AT-2: PCB에는 2핀 헤더만 있고 본체는 방열판 HS1 세로판(+X 면)의 R30 위에 붙인다. 원점은 RT1 1번 핀.
+    # HS1(134.5, 121)·R30 위치와 build_housing.py 높이에서 계산: 세로판 면 x -14.5, R30 위 끝 PCB 위 26.9mm.
+    # 머리 폭 3.7·두께 2.4mm는 판매처 표기, 높이 4mm와 색은 추정 [확인 필요]. 리드는 연장선으로 2핀 소켓에 꽂는다
+    ntc_y = -9.0
+    leads = [[(-13.3, ntc_y + dy, 29.5), (-13.3, ntc_y + dy, 28.0), (-2.0, ntc_y + dy, 28.0), (0, pin_y, 14.5)]
+             for dy, pin_y in ((-1.27, 0.0), (1.27, 2.54))]
+    write_wrl(os.path.join(HERE, '3d', 'Semitec_103AT-2_on_HS1.wrl'), [
+        ((0.55, 0.40, 0.20), [(-14.5, ntc_y - 1.85, 29.5, -12.1, ntc_y + 1.85, 33.5)]),               # NTC 머리
+        ((0.82, 0.82, 0.78), [wire(p, 0.25) for p in leads]),                                         # 리드선
+        ((0.10, 0.10, 0.11), [(-1.27, -1.27, 2.6, 1.27, 3.81, 14.5)])])                               # 2핀 소켓
     # LMR36015 RNX VQFN-HR 2x3mm: KiCad 10.0.1 라이브러리에 STEP이 없어 몸체만 넣는다. 높이 0.9mm는 추정
     write_wrl(os.path.join(HERE, '3d', 'Texas_RNX0012C_VQFN-14_2x3mm.wrl'), [
         ((0.16, 0.16, 0.17), [(-1.0, -1.5, 0, 1.0, 1.5, 0.9)])])
