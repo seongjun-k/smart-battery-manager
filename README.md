@@ -4,6 +4,12 @@
 
 ![PCB 3D](docs/img/pcb_3d_iso.png)
 
+## 바로 해 보기
+
+**https://seongjun-k.github.io/smart-battery-manager/**
+
+설치 없이 브라우저에서 가상 배터리와 웹 대시보드를 실행합니다. `sim/sim.py`를 [Pyodide](https://pyodide.org)로 브라우저 안에서 돌리고, 대시보드의 WebSocket 자리에 연결합니다(`demo/pysim.js`). 60배속으로 진행하며 진단 → 모드 선택 → 보관 방전·밸런싱·용량 테스트, 장치 탭의 결함 주입(팬 정지, 과열, 연결 불량 등)을 해 볼 수 있습니다. 주소 뒤에 `?cells=2`~`6`으로 셀 수, `?speed=`로 배속을 바꿉니다.
+
 ## 주요 기능
 
 | 기능 | 내용 |
@@ -31,6 +37,10 @@
 
 ![하우징](cad/img/iso_open.png)
 
+OLED 화면 (웹의 OLED 미러로 캡처, 펌웨어와 같은 글꼴·좌표):
+
+![OLED 화면](docs/img/oled_screens.png)
+
 ## 폴더 구성
 
 | 폴더 | 내용 |
@@ -40,6 +50,7 @@
 | `sim/` | 가상 하드웨어 시뮬레이터와 기능 테스트 (Python, aiohttp) |
 | `hw/` | KiCad 10 회로도·PCB, 생성·배선 스크립트, 커스텀 풋프린트와 3D 모델 |
 | `cad/` | Autodesk Inventor 하우징 모델과 생성 스크립트 |
+| `demo/` | GitHub Pages용 브라우저 시뮬레이터 연결 (`.github/workflows/pages.yml`이 배포) |
 | `tools/` | 보고서 그림 생성 스크립트 |
 | `docs/img/` | 회로도 PDF, PCB·웹 화면 그림 |
 
