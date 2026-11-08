@@ -144,6 +144,7 @@ run_until(dev, lambda: dev.state == "SELECT", 10)
 run_until(dev, lambda: "HIGH_IR" in dev.alarms, 1)
 assert dev.command({"cmd": "start", "mode": "STORAGE", "targetV": 3.80}) is not None
 assert dev.command({"cmd": "start", "mode": "CAPACITY"}) is not None
+assert dev.command({"cmd": "start", "mode": "BALANCE"}) is not None
 cmd(dev, cmd="start", mode="DIAG")
 print(f"9 IR 거부 통과: 셀 IR 최대 {max(dev.ir)}mΩ, 방전 모드 거부, 진단은 허용")
 
